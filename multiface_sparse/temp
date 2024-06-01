@@ -1,0 +1,125 @@
+Namespace(arch='base', data_dir='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS', epochs=50, framelist_test='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', framelist_train='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', krt_dir='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, local_rank=0, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_ckpt='/home/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth', n_worker=8, nlatent=256, pass_thres=50, resolution=[2048, 1334], result_path='/home/jianming/work/Privatar_prj/training_results/test', test_segment_config='./test_segment.json', tex_size=1024, train_batch_size=16, val_batch_size=8, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+#train samples 153330
+#test samples 44536
+args.tex_size=1024, args.mesh_inp_size=21918, args.nlatent=256, n_cams=38
+loading checkpoint from /home/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth
+avg_tex=torch.Size([16, 3, 1024, 1024]), verts=torch.Size([16, 7306, 3]), view=torch.Size([16, 3]), cams=torch.Size([16])
+model.pth saved [Epoch 0 Batch Index 0]
+0 loss 0.130 vert 0.003 tex 0.078 screen 0.042 kl 0.625
+Namespace(arch='base', data_dir='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS', epochs=50, framelist_test='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', framelist_train='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', krt_dir='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, local_rank=0, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_ckpt='/home/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth', n_worker=8, nlatent=256, pass_thres=50, resolution=[2048, 1334], result_path='/home/jianming/work/Privatar_prj/training_results/test', test_segment_config='./test_segment.json', tex_size=1024, train_batch_size=16, val_batch_size=8, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+#train samples 153330
+#test samples 44536
+args.tex_size=1024, args.mesh_inp_size=21918, args.nlatent=256, n_cams=38
+loading checkpoint from /home/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth
+Namespace(arch='base', data_dir='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS', epochs=50, framelist_test='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', framelist_train='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', krt_dir='/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, local_rank=0, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_ckpt='/home/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth', n_worker=8, nlatent=256, pass_thres=50, resolution=[2048, 1334], result_path='/home/jianming/work/Privatar_prj/training_results/test', test_segment_config='./test_segment.json', tex_size=1024, train_batch_size=16, val_batch_size=8, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+#train samples 153330
+#test samples 44536
+args.tex_size=1024, args.mesh_inp_size=21918, args.nlatent=256, n_cams=38
+loading checkpoint from /home/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth
+avg_tex=torch.Size([16, 3, 1024, 1024]), verts=torch.Size([16, 7306, 3]), view=torch.Size([16, 3]), cams=torch.Size([16]), cams=tensor([22, 37, 14, 19,  7, 11, 31,  2, 20, 20, 14, 21,  9,  6, 10,  5],
+       device='cuda:0')
+out.shape=torch.Size([16, 256, 8, 8])
+self.bias.shape=torch.Size([1, 256, 8, 8])
+out.shape=torch.Size([16, 64, 16, 16])
+self.bias.shape=torch.Size([1, 64, 16, 16])
+out.shape=torch.Size([16, 64, 32, 32])
+self.bias.shape=torch.Size([1, 64, 32, 32])
+out.shape=torch.Size([16, 32, 64, 64])
+self.bias.shape=torch.Size([1, 32, 64, 64])
+out.shape=torch.Size([16, 32, 128, 128])
+self.bias.shape=torch.Size([1, 32, 128, 128])
+out.shape=torch.Size([16, 16, 256, 256])
+self.bias.shape=torch.Size([1, 16, 256, 256])
+out.shape=torch.Size([16, 16, 512, 512])
+self.bias.shape=torch.Size([1, 16, 512, 512])
+out.shape=torch.Size([16, 3, 1024, 1024])
+self.bias.shape=torch.Size([1, 3, 1024, 1024])
+model.pth saved [Epoch 0 Batch Index 0]
+0 loss 0.129 vert 0.003 tex 0.078 screen 0.042 kl 0.625
