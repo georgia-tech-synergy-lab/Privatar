@@ -27,6 +27,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from utils import Renderer, gammaCorrect
 
+save_latent_code_external = True
 
 def main(args, camera_config, test_segment):
     local_rank = torch.distributed.get_rank()
@@ -144,7 +145,7 @@ def main(args, camera_config, test_segment):
 
     os.makedirs(args.result_path, exist_ok=True)
 
-    def run_net(data):
+    def run_net(data, iter):
         M = data["M"].cuda()
         gt_tex = data["tex"].cuda()
         vert_ids = data["vert_ids"].cuda()
@@ -160,6 +161,9 @@ def main(args, camera_config, test_segment):
         batch, channel, height, width = avg_tex.shape
 
         output = {}
+        
+        model.module.iter = iter
+        # print iter of the model for verification purpose
 
         if args.arch == "warp":
             pred_tex, pred_verts, unwarped_tex, warp_field, kl = model(
@@ -270,8 +274,8 @@ def main(args, camera_config, test_segment):
 
     for j in range(iter):
         total, vert, tex, screen, kl = [], [], [], [], []
-        for i, data in enumerate(test_loader):
-            losses, output = run_net(data)
+        for i, data in enumerate(test_loader):            
+            losses, output = run_net(data, i)
             optimizer_cc.zero_grad()
             optimizer_enc.zero_grad()
             total.append(losses["total_loss"].item())

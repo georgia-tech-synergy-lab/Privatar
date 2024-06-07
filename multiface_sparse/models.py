@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+save_latent_code_external = True
 
 class WarpFieldVAE(nn.Module):
     def __init__(
@@ -88,6 +89,7 @@ class DeepAppearanceVAE(nn.Module):
             tex_size, mesh_inp_size, z_dim=z_dim, res=res, non=non, bilinear=bilinear
         )
         self.cc = ColorCorrection(n_cams)
+        self.iter = 0
 
     def forward(self, avgtex, mesh, view, cams=None):
         b, n, _ = mesh.shape
@@ -103,6 +105,12 @@ class DeepAppearanceVAE(nn.Module):
         else:
             z = torch.cat((mean, logstd), -1)
             kl = torch.tensor(0).to(z.device)
+        
+        if save_latent_code_external:
+            torch.save(mean, f"/home/jianming/work/Privatar_prj/profiled_latent_code/original_model/mean_{self.iter}.pth")
+            torch.save(std, f"/home/jianming/work/Privatar_prj/profiled_latent_code/original_model/std_{self.iter}.pth")
+            torch.save(kl, f"/home/jianming/work/Privatar_prj/profiled_latent_code/original_model/kl_{self.iter}.pth")
+            torch.save(z, f"/home/jianming/work/Privatar_prj/profiled_latent_code/original_model/z_{self.iter}.pth")
 
         pred_tex, pred_mesh = self.dec(z, view)
         pred_mesh = pred_mesh.view((b, n, 3))

@@ -27,6 +27,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from utils import Renderer, gammaCorrect
 
+quantization_enable = True
 
 def main(args, camera_config, test_segment):
     local_rank = torch.distributed.get_rank()
@@ -117,6 +118,10 @@ def main(args, camera_config, test_segment):
         print("loading checkpoint from", args.model_ckpt)
         map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
         model.load_state_dict(torch.load(args.model_ckpt, map_location=map_location))
+
+    if quantization_enable:
+        model.module.dec.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm')
+        model.module.dec = torch.ao.quantization.prepare_qat(model.module.dec)
 
     optimizer = optim.Adam(model.module.get_model_params(), args.lr, (0.9, 0.999))
     optimizer_cc = optim.Adam(model.module.get_cc_params(), args.lr, (0.9, 0.999))
@@ -420,6 +425,11 @@ def main(args, camera_config, test_segment):
         "best screen loss %f, best tex loss %f best vert loss %f"
         % (best_screen_loss, best_tex_loss, best_vert_loss)
     )
+
+    if quantization_enable:
+        model.eval()
+        model = torch.ao.quantization.convert(model)
+
     if local_rank == 0:
         torch.save(model.state_dict(), os.path.join(args.result_path, "model.pth"))
     train_screen_loss = np.mean(np.array(train_screen_losses))
