@@ -141,7 +141,7 @@ def main(args, camera_config, test_segment):
     else:
         raise NotImplementedError
 
-    # model = torch.nn.parallel.DistributedDataParallel(model, [local_rank], local_rank)
+    model = torch.nn.parallel.DistributedDataParallel(model, [local_rank], local_rank)
     renderer = Renderer()
 
     # Cannot preload pretrained weights because the Private Path tackles private input images.

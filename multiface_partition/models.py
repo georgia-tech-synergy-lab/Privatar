@@ -7,6 +7,7 @@
 import math
 from os import wait
 import os
+import os
 
 import numpy as np
 import torch
@@ -19,7 +20,11 @@ from PIL import Image
 import torchvision.transforms as transforms
 
 save_latent_code_to_external_device = True
-prefix_path_captured_latent_code = "/workspace/uwing2/Privatar/testing_results/horizontal_partition_"
+
+prefix_path_captured_latent_code_uwing2 = "/workspace/uwing2/Privatar/testing_results/horizontal_partition_"
+prefix_path_captured_latent_code_god2 = "/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_"
+
+prefix_path_captured_latent_code = prefix_path_captured_latent_code_god2
 Add_noise = False
 
 # Select based on the difference of downsample input --- BDCT frequency block.
@@ -190,10 +195,14 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
             path_captured_latent_code = f"{prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
             if not os.path.exists(path_captured_latent_code):
                 os.makedirs(path_captured_latent_code)
+            path_captured_latent_code = f"{prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
+            if not os.path.exists(path_captured_latent_code):
+                os.makedirs(path_captured_latent_code)
             torch.save(logstd, f"{path_captured_latent_code}/logstd_{self.iter}.pth")
             torch.save(mean, f"{path_captured_latent_code}/mean_{self.iter}.pth")
             torch.save(z, f"{path_captured_latent_code}/z_{self.iter}.pth")
             torch.save(kl, f"{path_captured_latent_code}/kl_{self.iter}.pth")
+            self.iter = self.iter + 1
             self.iter = self.iter + 1
 
         pred_tex_private, pred_mesh = self.dec(z, view)
@@ -211,6 +220,11 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
             z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
             
         if save_latent_code_to_external_device:
+            path_captured_latent_code = f"{prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
+            torch.save(logstd_outsource, f"{path_captured_latent_code}/logstd_outsource_{self.iter_outsource}.pth")
+            torch.save(mean_outsource, f"{path_captured_latent_code}/mean_outsource_{self.iter_outsource}.pth")
+            torch.save(z_outsource, f"{path_captured_latent_code}/z_outsource_{self.iter_outsource}.pth")
+            self.iter_outsource = self.iter_outsource + 1
             path_captured_latent_code = f"{prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
             torch.save(logstd_outsource, f"{path_captured_latent_code}/logstd_outsource_{self.iter_outsource}.pth")
             torch.save(mean_outsource, f"{path_captured_latent_code}/mean_outsource_{self.iter_outsource}.pth")
