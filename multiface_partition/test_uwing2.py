@@ -79,18 +79,17 @@ def main(args, camera_config, test_segment):
     map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
     state_dict = torch.load(args.model_path, map_location=map_location)
 
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        name = k[7:]  # remove 'module.'
-        new_state_dict[name] = v
-    model.load_state_dict(new_state_dict)
+    # new_state_dict = OrderedDict()
+    # for k, v in state_dict.items():
+    #     name = k[7:]  # remove 'module.'
+    #     new_state_dict[name] = v
+    model.load_state_dict(state_dict)
     model = model.to(device)
 
-    model = torch.nn.parallel.DistributedDataParallel(model, [local_rank], local_rank)
     renderer = Renderer()
 
-    optimizer_cc = optim.Adam(model.module.get_cc_params(), args.lr, (0.9, 0.999))
-    optimizer_enc = optim.Adam(model.module.enc.parameters(), args.lr, (0.9, 0.999))
+    optimizer_cc = optim.Adam(model.get_cc_params(), args.lr, (0.9, 0.999))
+    optimizer_enc = optim.Adam(model.enc.parameters(), args.lr, (0.9, 0.999))
     mse = nn.MSELoss()
 
     texmean = cv2.resize(dataset_test.texmean, (args.tex_size, args.tex_size))
@@ -128,8 +127,11 @@ def main(args, camera_config, test_segment):
         mask = data["mask"].cuda()
         cams = data["cam"].cuda()
         batch, channel, height, width = avg_tex.shape
-
         output = {}
+        
+        height_render, width_render = args.resolution
+        width_render = width_render - (width_render % 8)
+        photo_short = torch.Tensor(photo)[:, :, :width_render, :]
 
         if args.arch == "warp":
             pred_tex, pred_verts, unwarped_tex, warp_field, kl = model(
@@ -153,13 +155,13 @@ def main(args, camera_config, test_segment):
         
         if args.lambda_screen > 0:
             screen_mask, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, [height_render, width_render]#args.resolution
             )
             pred_screen, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, [height_render, width_render]#args.resolution
             )
             screen_loss = (
-                torch.mean((pred_screen - photo) ** 2 * screen_mask)
+                torch.mean((pred_screen - photo_short) ** 2 * screen_mask[:, :, :width_render, :])
                 * (255**2)
                 / (texstd**2)
             )
@@ -305,7 +307,7 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=100, help="Validation batch size"
+        "--val_batch_size", type=int, default=8, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -388,7 +390,7 @@ if __name__ == "__main__":
         "--val_num", type=int, default=500, help="Number of iterations for validation"
     )
     parser.add_argument(
-        "--n_worker", type=int, default=0, help="Number of workers loading dataset"
+        "--n_worker", type=int, default=8, help="Number of workers loading dataset"
     )
     parser.add_argument(
         "--pass_thres",

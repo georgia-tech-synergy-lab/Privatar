@@ -6,6 +6,7 @@
 
 import math
 from os import wait
+import os
 
 import numpy as np
 import torch
@@ -17,9 +18,8 @@ from torchjpeg import dct
 from PIL import Image
 import torchvision.transforms as transforms
 
-save_latent_code_to_external_device = False
-path_captured_latent_code = "/home/jianming/work/multiface/captured_distribution/"
-save_latent_code_external = True
+save_latent_code_to_external_device = True
+prefix_path_captured_latent_code = "/workspace/uwing2/Privatar/testing_results/horizontal_partition_"
 Add_noise = False
 
 # Select based on the difference of downsample input --- BDCT frequency block.
@@ -89,6 +89,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         )
         self.cc = ColorCorrection(n_cams)
         self.iter = 0
+        self.iter_outsource = 0
 
 
     def img_reorder(self, x, bs, ch, h, w):
@@ -186,11 +187,14 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
             kl = torch.tensor(0).to(z.device)
         
         if save_latent_code_to_external_device:
-            path_captured_latent_code = "/home/jianming/work/Privatar_prj/profiled_latent_code/partition_model/private_path"
+            path_captured_latent_code = f"{prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
+            if not os.path.exists(path_captured_latent_code):
+                os.makedirs(path_captured_latent_code)
             torch.save(logstd, f"{path_captured_latent_code}/logstd_{self.iter}.pth")
             torch.save(mean, f"{path_captured_latent_code}/mean_{self.iter}.pth")
             torch.save(z, f"{path_captured_latent_code}/z_{self.iter}.pth")
             torch.save(kl, f"{path_captured_latent_code}/kl_{self.iter}.pth")
+            self.iter = self.iter + 1
 
         pred_tex_private, pred_mesh = self.dec(z, view)
         pred_tex_private = pred_tex_private.view(bs, ch, -1, block_num, block_num)
@@ -207,11 +211,11 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
             z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
             
         if save_latent_code_to_external_device:
-            path_captured_latent_code = "/home/jianming/work/Privatar_prj/profiled_latent_code/partition_model/outsourced_path"
-            torch.save(logstd, f"{path_captured_latent_code}/logstd_{self.iter}.pth")
-            torch.save(mean, f"{path_captured_latent_code}/mean_{self.iter}.pth")
-            torch.save(z, f"{path_captured_latent_code}/z_{self.iter}.pth")
-            torch.save(kl, f"{path_captured_latent_code}/kl_{self.iter}.pth")
+            path_captured_latent_code = f"{prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
+            torch.save(logstd_outsource, f"{path_captured_latent_code}/logstd_outsource_{self.iter_outsource}.pth")
+            torch.save(mean_outsource, f"{path_captured_latent_code}/mean_outsource_{self.iter_outsource}.pth")
+            torch.save(z_outsource, f"{path_captured_latent_code}/z_outsource_{self.iter_outsource}.pth")
+            self.iter_outsource = self.iter_outsource + 1
         
         pred_tex_outsource = self.dec_outsource(z_outsource, view)
         pred_tex_outsource = pred_tex_outsource.view(bs, ch, -1, block_num, block_num)
