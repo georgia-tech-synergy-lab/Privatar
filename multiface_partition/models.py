@@ -21,10 +21,7 @@ import torchvision.transforms as transforms
 
 save_latent_code_to_external_device = True
 
-prefix_path_captured_latent_code_uwing2 = "/workspace/uwing2/Privatar/testing_results/horizontal_partition_"
-prefix_path_captured_latent_code_god2 = "/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_"
-
-prefix_path_captured_latent_code = prefix_path_captured_latent_code_god2
+# prefix_path_captured_latent_code = prefix_path_captured_latent_code_god2
 Add_noise = False
 
 # Select based on the difference of downsample input --- BDCT frequency block.
@@ -51,7 +48,6 @@ for element in all_possible_idx:
     if element not in private_idx:
         public_idx.append(element)
 
-
 class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
     def __init__(
         self,
@@ -63,6 +59,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         n_blocks=8,
         frequency_threshold=19,
         average_texture_path="/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png",
+        prefix_path_captured_latent_code="/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_",
         res=False,
         non=False,
         bilinear=False,
@@ -95,7 +92,9 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         self.cc = ColorCorrection(n_cams)
         self.iter = 0
         self.iter_outsource = 0
-
+        self.prefix_path_captured_latent_code = prefix_path_captured_latent_code
+        if not os.path.exists(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"):
+            os.makedirs(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code")
 
     def img_reorder(self, x, bs, ch, h, w):
         x = (x + 1) / 2 * 255
@@ -192,17 +191,11 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
             kl = torch.tensor(0).to(z.device)
         
         if save_latent_code_to_external_device:
-            path_captured_latent_code = f"{prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
-            if not os.path.exists(path_captured_latent_code):
-                os.makedirs(path_captured_latent_code)
-            path_captured_latent_code = f"{prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
-            if not os.path.exists(path_captured_latent_code):
-                os.makedirs(path_captured_latent_code)
+            path_captured_latent_code = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
             torch.save(logstd, f"{path_captured_latent_code}/logstd_{self.iter}.pth")
             torch.save(mean, f"{path_captured_latent_code}/mean_{self.iter}.pth")
             torch.save(z, f"{path_captured_latent_code}/z_{self.iter}.pth")
             torch.save(kl, f"{path_captured_latent_code}/kl_{self.iter}.pth")
-            self.iter = self.iter + 1
             self.iter = self.iter + 1
 
         pred_tex_private, pred_mesh = self.dec(z, view)
@@ -220,12 +213,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
             z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
             
         if save_latent_code_to_external_device:
-            path_captured_latent_code = f"{prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
-            torch.save(logstd_outsource, f"{path_captured_latent_code}/logstd_outsource_{self.iter_outsource}.pth")
-            torch.save(mean_outsource, f"{path_captured_latent_code}/mean_outsource_{self.iter_outsource}.pth")
-            torch.save(z_outsource, f"{path_captured_latent_code}/z_outsource_{self.iter_outsource}.pth")
-            self.iter_outsource = self.iter_outsource + 1
-            path_captured_latent_code = f"{prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
+            path_captured_latent_code = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
             torch.save(logstd_outsource, f"{path_captured_latent_code}/logstd_outsource_{self.iter_outsource}.pth")
             torch.save(mean_outsource, f"{path_captured_latent_code}/mean_outsource_{self.iter_outsource}.pth")
             torch.save(z_outsource, f"{path_captured_latent_code}/z_outsource_{self.iter_outsource}.pth")
@@ -243,7 +231,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         for i, idx in enumerate(self.public_idx):
             pred_tex[:, :, idx, :, :] = pred_tex_outsource[:, :, i, :, :]
         # Adding block reconstructions -- Done
-# # reorder to revert the layout
+        # # reorder to revert the layout
         idct_dct_block_reorder = pred_tex.view(bs, ch, 64, block_num*block_num).permute(0, 1, 3, 2).view(bs, ch, block_num*block_num, 8, 8)
 
         idct_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT

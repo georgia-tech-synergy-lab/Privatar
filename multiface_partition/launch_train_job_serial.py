@@ -3,12 +3,11 @@ import os
 # Please select one path out of the following three paths based on the server
 path_prefix_god2 = "/home/jianming/work/multiface/"
 path_prefix_synergy3 = "/home/jianming/work/Privatar_prj/training_results/"
-path_prefix_uwing2 = "/workspace/uwing2/multiface/"
 
 average_texture_path = "dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png"
 # Please select one path out of the following three paths based on the server
 #######
-path_prefix = path_prefix_uwing2
+path_prefix = path_prefix_god2
 #######
 
 average_texture_path = path_prefix + average_texture_path

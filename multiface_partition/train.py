@@ -136,7 +136,7 @@ def main(args, camera_config, test_segment):
     if args.arch == "base":
         # print(f"args.tex_size={args.tex_size}, args.mesh_inp_size={args.mesh_inp_size}, args.nlatent={args.nlatent}, n_cams={n_cams}")
         model = DeepAppearanceVAE_Horizontal_Partition(
-            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, frequency_threshold=args.frequency_threshold, average_texture_path=args.average_texture_path
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, frequency_threshold=args.frequency_threshold, average_texture_path=args.average_texture_path, prefix_path_captured_latent_code=args.prefix_path_captured_latent_code
         ).to(device)
     else:
         raise NotImplementedError
@@ -654,6 +654,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--average_texture_path", type=str, default="/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
     )
+    parser.add_argument(
+        "--prefix_path_captured_latent_code", type=str, default="/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
+    )
+    
     experiment_args = parser.parse_args()
     print(experiment_args)
 
