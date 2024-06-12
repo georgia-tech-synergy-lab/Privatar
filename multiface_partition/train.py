@@ -553,7 +553,7 @@ if __name__ == "__main__":
         "--mesh_inp_size", type=int, default=21918, help="Input mesh dimension"
     )
     parser.add_argument(
-        "--epochs", type=int, default=10, help="Number of training epochs"
+        "--epochs", type=int, default=5, help="Number of training epochs"
     )
     parser.add_argument(
         "--data_dir",
