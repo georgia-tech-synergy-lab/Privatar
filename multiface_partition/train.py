@@ -93,7 +93,9 @@ def model_decoder_pruning(model, unified_pruning_ratio):
     return model
 
 def main(args, camera_config, test_segment):
-    device = torch.device("cuda:0")
+    local_rank = torch.distributed.get_rank()
+    torch.cuda.set_device(local_rank)
+    device = torch.device("cuda", local_rank)
 
     dataset_train = Dataset(
         args.data_dir,
@@ -153,8 +155,8 @@ def main(args, camera_config, test_segment):
     if sparsity_enable:
         model = model_decoder_pruning(model, args.unified_pruning_ratio)
 
-    optimizer = optim.Adam(model.get_model_params(), args.lr, (0.9, 0.999))
-    optimizer_cc = optim.Adam(model.get_cc_params(), args.lr, (0.9, 0.999))
+    optimizer = optim.Adam(model.module.get_model_params(), args.lr, (0.9, 0.999))
+    optimizer_cc = optim.Adam(model.module.get_cc_params(), args.lr, (0.9, 0.999))
     mse = nn.MSELoss()
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
 
@@ -519,15 +521,16 @@ def main(args, camera_config, test_segment):
 
 
 if __name__ == "__main__":
+    torch.distributed.init_process_group(backend="nccl")
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument(
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=80, help="Training batch size"
+        "--train_batch_size", type=int, default=20, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=80, help="Validation batch size"
+        "--val_batch_size", type=int, default=20, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",

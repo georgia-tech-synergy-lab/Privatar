@@ -20,6 +20,7 @@ from PIL import Image
 import torchvision.transforms as transforms
 
 save_latent_code_to_external_device = True
+noisy_training = True
 
 # prefix_path_captured_latent_code = prefix_path_captured_latent_code_god2
 Add_noise = False
@@ -47,6 +48,10 @@ public_idx = []
 for element in all_possible_idx:
     if element not in private_idx:
         public_idx.append(element)
+
+if noisy_training:
+    variance_matrix_tensor = torch.load("/home/jianming/work/Privatar_prj/profiled_latent_code/noise_variance_matrix_horizontal_partition_4_mutual_bound_0.1_outsource_path_latent.pth")
+    mean = np.zeros(256)
 
 class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
     def __init__(
@@ -201,7 +206,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         pred_tex_private, pred_mesh = self.dec(z, view)
         pred_tex_private = pred_tex_private.view(bs, ch, -1, block_num, block_num)
         
-        # Adding model outsource encoder
+        
         mean_outsource, logstd_outsource = self.enc_outsource(public_dct_block)
         mean_outsource = mean_outsource * 0.1
         logstd_outsource = logstd_outsource * 0.01
@@ -211,7 +216,12 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
             z_outsource = mean_outsource + std_outsource * eps_outsource
         else:
             z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
-            
+        
+        # Adding model outsource encoder
+        if noisy_training:
+            samples = torch.from_numpy(np.random.multivariate_normal(mean, variance_matrix_tensor.detach().numpy(), 1))
+            z_outsource = z_outsource + samples
+
         if save_latent_code_to_external_device:
             path_captured_latent_code = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
             torch.save(logstd_outsource, f"{path_captured_latent_code}/logstd_outsource_{self.iter_outsource}.pth")
