@@ -19,11 +19,10 @@ from torchjpeg import dct
 from PIL import Image
 import torchvision.transforms as transforms
 
-save_latent_code_to_external_device = True
+save_latent_code_to_external_device = False
 noisy_training = True
 
 # prefix_path_captured_latent_code = prefix_path_captured_latent_code_god2
-Add_noise = False
 
 # Select based on the difference of downsample input --- BDCT frequency block.
 all_private_selection = [[ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63],
@@ -48,10 +47,6 @@ public_idx = []
 for element in all_possible_idx:
     if element not in private_idx:
         public_idx.append(element)
-
-if noisy_training:
-    variance_matrix_tensor = torch.load("/home/jianming/work/Privatar_prj/profiled_latent_code/noise_variance_matrix_horizontal_partition_4_mutual_bound_0.1_outsource_path_latent.pth")
-    mean = np.zeros(256)
 
 class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
     def __init__(
@@ -100,6 +95,10 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         self.prefix_path_captured_latent_code = prefix_path_captured_latent_code
         if not os.path.exists(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"):
             os.makedirs(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code")
+
+        self.mean = np.zeros(256)
+        if noisy_training:
+            self.variance_matrix_tensor = torch.load("/home/jianming/work/Privatar_prj/profiled_latent_code/noise_variance_matrix_horizontal_partition_4_mutual_bound_0.1_outsource_path_latent.pth").cpu()
 
     def img_reorder(self, x, bs, ch, h, w):
         x = (x + 1) / 2 * 255
@@ -219,7 +218,10 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         
         # Adding model outsource encoder
         if noisy_training:
-            samples = torch.from_numpy(np.random.multivariate_normal(mean, variance_matrix_tensor.detach().numpy(), 1))
+            self.variance_matrix_tensor = self.variance_matrix_tensor.cpu()
+            samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.variance_matrix_tensor.detach().numpy(), z_outsource.shape[0]))
+            samples = samples.to("cuda:0")
+            samples = samples.to(z_outsource.dtype)
             z_outsource = z_outsource + samples
 
         if save_latent_code_to_external_device:
