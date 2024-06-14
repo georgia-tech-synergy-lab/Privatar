@@ -19,8 +19,8 @@ from torchjpeg import dct
 from PIL import Image
 import torchvision.transforms as transforms
 
-save_latent_code_to_external_device = False
-noisy_training = True
+save_latent_code_to_external_device = True
+noisy_training = False
 
 # prefix_path_captured_latent_code = prefix_path_captured_latent_code_god2
 

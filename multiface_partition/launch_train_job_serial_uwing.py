@@ -23,7 +23,7 @@ BDCT_threshold = [0.8, 1]#, 1, 1.6, 2.4, 3, 4, 5, 6, 19]
 # scl enable devtoolset-11 bash
 #  --master_port=25678
 for BDCT_thres in BDCT_threshold:
-    result_path = f"/workspace/uwing2/Privatar/partition_results/horizontal_partition_{str(BDCT_thres)}"
+    result_path = f"/workspace/uwing2/Privatar/training_results/horizontal_partition_{str(BDCT_thres)}"
     if not os.path.exists(result_path):
         os.makedirs(result_path)
     

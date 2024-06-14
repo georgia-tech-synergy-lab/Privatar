@@ -23,16 +23,19 @@ import torch.nn.functional as F
 import torch.optim as optim
 from dataset import Dataset
 from models import DeepAppearanceVAE_Horizontal_Partition
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 from utils import Renderer, gammaCorrect
+from datetime import datetime
+import wandb
 
-enable_latent_code_profile = True
+wandb_enable = True
 
 def main(args, camera_config, test_segment):
-    local_rank = torch.distributed.get_rank()
-    torch.cuda.set_device(local_rank)
-    device = torch.device("cuda", local_rank)
+    # local_rank = torch.distributed.get_rank()
+    # torch.cuda.set_device(local_rank)
+    # device = torch.device("cuda", local_rank)
+    device = torch.device("cuda:0")
 
     dataset_train = Dataset(
         args.data_dir,
@@ -52,7 +55,7 @@ def main(args, camera_config, test_segment):
         valid_prefix=test_segment,
     )
 
-    test_sampler = DistributedSampler(dataset_test)
+    test_sampler = RandomSampler(dataset_test)
 
     test_loader = DataLoader(
         dataset_test,
@@ -61,14 +64,13 @@ def main(args, camera_config, test_segment):
         num_workers=args.n_worker,
     )
 
-    if local_rank == 0:
-        print("#test samples", len(dataset_test))
-        writer = SummaryWriter(log_dir=args.result_path)
+    print("#test samples", len(dataset_test))
+    writer = SummaryWriter(log_dir=args.result_path)
 
     n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
     if args.arch == "base":
         model = DeepAppearanceVAE_Horizontal_Partition(
-            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, frequency_threshold=args.frequency_threshold, average_texture_path=args.average_texture_path
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, frequency_threshold=args.frequency_threshold, average_texture_path=args.average_texture_path, prefix_path_captured_latent_code=args.prefix_path_captured_latent_code
         ).to(device)
     else:
         raise NotImplementedError
@@ -76,7 +78,8 @@ def main(args, camera_config, test_segment):
     # by default load the best_model.pth
     # state_dict = torch.load(model_dir)
     print("loading model from", args.model_path)
-    map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
+    map_location = {"cuda:0": "cuda:0"}
+    # map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
     state_dict = torch.load(args.model_path, map_location=map_location)
 
     # new_state_dict = OrderedDict()
@@ -113,6 +116,28 @@ def main(args, camera_config, test_segment):
 
     os.makedirs(args.result_path, exist_ok=True)
 
+    date_time = datetime.now()
+    if wandb_enable:
+        wandb_logger = wandb.init(
+            config={
+                "tex_size": args.tex_size,
+                "mesh_inp_size": args.mesh_inp_size,
+                "n_latent": args.nlatent,
+                "n_cams": n_cams,
+            },
+            project=args.project_name,
+            entity=args.author_name,
+            name=args.arch + "_" + "HorizontalPartition" + str(args.frequency_threshold),
+            group="group0",
+            dir=args.result_path
+            + "_"
+            + args.arch
+            + "_"
+            + date_time.strftime("_%m_%d_%Y"),
+            job_type="testing",
+            reinit=True,
+        )
+
     def run_net(data, iter):
         M = data["M"].cuda()
         gt_tex = data["tex"].cuda()
@@ -142,9 +167,6 @@ def main(args, camera_config, test_segment):
         else:
             pred_tex, pred_verts, kl = model(avg_tex, verts, view, cams=cams)
         vert_loss = mse(pred_verts, verts)
-
-        if enable_latent_code_profile:
-            model.iter = iter
 
         pred_verts = pred_verts * vertstd + vertmean
         pred_tex = (pred_tex * texstd + texmean) / 255.0
@@ -259,7 +281,7 @@ def main(args, camera_config, test_segment):
             optimizer_enc.step()
             if i == args.val_num and j != (iter - 1):
                 break
-            if i < args.val_num and j == (iter - 1) and local_rank == 0:
+            if i < args.val_num and j == (iter - 1):
                 save_img(data, output, "val_%s_%s" % (val_idx, i))
 
     tex_loss = np.array(tex).mean()
@@ -267,17 +289,27 @@ def main(args, camera_config, test_segment):
     screen_loss = np.array(screen).mean()
     kl = np.array(kl).mean()
 
-    if local_rank == 0:
-        writer.add_scalar('val/loss_tex',losses['tex_loss'].item(), val_idx)
-        writer.add_scalar('val/loss_verts', losses['vert_loss'].item(), val_idx)
-        writer.add_scalar('val/loss_screen', losses['screen_loss'].item(), val_idx)
-        writer.add_scalar('val/loss_kl', losses['kl'].item(), val_idx)
+    writer.add_scalar('val/loss_tex',losses['tex_loss'].item(), val_idx)
+    writer.add_scalar('val/loss_verts', losses['vert_loss'].item(), val_idx)
+    writer.add_scalar('val/loss_screen', losses['screen_loss'].item(), val_idx)
+    writer.add_scalar('val/loss_kl', losses['kl'].item(), val_idx)
 
     val_idx += 1
     print(
         "val %d vert %.3f tex %.3f screen %.5f kl %.3f"
         % (val_idx, vert_loss, tex_loss, screen_loss, kl)
     )
+
+    if wandb_enable:
+        wandb_logger.log(
+            {
+                "val_total_loss": losses["total_loss"].item(),
+                "val_vert_loss": vert_loss,
+                "val_tex_loss": tex_loss,
+                "val_screen_loss": screen_loss,
+                "val_kl": kl,
+            }
+        )
 
     best_screen_loss = min(best_screen_loss, screen_loss)
     best_tex_loss = min(best_tex_loss, tex_loss)
@@ -300,14 +332,14 @@ def main(args, camera_config, test_segment):
 
 
 if __name__ == "__main__":
-    torch.distributed.init_process_group(backend="nccl")
+    # torch.distributed.init_process_group(backend="nccl")
 
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument(
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=8, help="Validation batch size"
+        "--val_batch_size", type=int, default=80, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -390,7 +422,7 @@ if __name__ == "__main__":
         "--val_num", type=int, default=500, help="Number of iterations for validation"
     )
     parser.add_argument(
-        "--n_worker", type=int, default=8, help="Number of workers loading dataset"
+        "--n_worker", type=int, default=0, help="Number of workers loading dataset"
     )
     parser.add_argument(
         "--pass_thres",
@@ -405,10 +437,25 @@ if __name__ == "__main__":
         help="Directory to output files",
     )
     parser.add_argument(
+        "--project_name",
+        type=str,
+        default=None,
+        help="PiCA Partition - Training Task",
+    )
+    parser.add_argument(
+        "--author_name",
+        type=str,
+        default=None,
+        help="Jianming Tong",
+    )
+    parser.add_argument(
         "--frequency_threshold", type=float, default=19, help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
     )
     parser.add_argument(
         "--average_texture_path", type=str, default="/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
+    )
+    parser.add_argument(
+        "--prefix_path_captured_latent_code", type=str, default="/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
     )
     parser.add_argument("--model_path", type=str, default=None, help="Model path")
     experiment_args = parser.parse_args()

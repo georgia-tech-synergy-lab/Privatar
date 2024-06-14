@@ -27,8 +27,6 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from utils import Renderer, gammaCorrect
 
-enable_latent_code_profile = True
-
 def main(args, camera_config, test_segment):
     local_rank = torch.distributed.get_rank()
     torch.cuda.set_device(local_rank)
@@ -140,9 +138,6 @@ def main(args, camera_config, test_segment):
         else:
             pred_tex, pred_verts, kl = model(avg_tex, verts, view, cams=cams)
         vert_loss = mse(pred_verts, verts)
-
-        if enable_latent_code_profile:
-            model.iter = iter
 
         pred_verts = pred_verts * vertstd + vertmean
         pred_tex = (pred_tex * texstd + texmean) / 255.0

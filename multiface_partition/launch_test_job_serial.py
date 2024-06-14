@@ -3,7 +3,6 @@ import os
 # Please select one path out of the following three paths based on the server
 path_prefix_god2 ="/home/jianming/work/multiface/"
 path_prefix_synergy3 = "/home/jianming/work/multiface/"
-path_prefix_uwing2 = "/workspace/uwing2/multiface/"
 
 path_testing_latent_code_god2 = "/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_"
 path_testing_latent_code_synergy3 = "/usr/scratch/jianming/Privatar/testing_results/horizontal_partition_"
