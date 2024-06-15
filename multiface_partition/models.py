@@ -19,8 +19,7 @@ from torchjpeg import dct
 from PIL import Image
 import torchvision.transforms as transforms
 
-save_latent_code_to_external_device = True
-noisy_training = False
+
 
 # prefix_path_captured_latent_code = prefix_path_captured_latent_code_god2
 
@@ -60,6 +59,9 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         frequency_threshold=19,
         average_texture_path="/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png",
         prefix_path_captured_latent_code="/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_",
+        path_variance_matrix_tensor="/usr/scratch/jianming/Privatar/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_6.0_mutual_bound_1.pth",
+        save_latent_code_to_external_device = False,
+        noisy_training = True,
         res=False,
         non=False,
         bilinear=False,
@@ -93,12 +95,14 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         self.iter = 0
         self.iter_outsource = 0
         self.prefix_path_captured_latent_code = prefix_path_captured_latent_code
+        self.save_latent_code_to_external_device = save_latent_code_to_external_device
+        self.noisy_training = noisy_training
         if not os.path.exists(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"):
             os.makedirs(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code")
 
         self.mean = np.zeros(256)
         if noisy_training:
-            self.variance_matrix_tensor = torch.load("/home/jianming/work/Privatar_prj/profiled_latent_code/noise_variance_matrix_horizontal_partition_4_mutual_bound_0.1_outsource_path_latent.pth").cpu()
+            self.variance_matrix_tensor = torch.load(path_variance_matrix_tensor).cpu()
 
     def img_reorder(self, x, bs, ch, h, w):
         x = (x + 1) / 2 * 255
@@ -194,7 +198,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
             z = torch.cat((mean, logstd), -1)
             kl = torch.tensor(0).to(z.device)
         
-        if save_latent_code_to_external_device:
+        if self.save_latent_code_to_external_device:
             path_captured_latent_code = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
             torch.save(logstd, f"{path_captured_latent_code}/logstd_{self.iter}.pth")
             torch.save(mean, f"{path_captured_latent_code}/mean_{self.iter}.pth")
@@ -217,14 +221,14 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
             z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
         
         # Adding model outsource encoder
-        if noisy_training:
+        if self.noisy_training:
             self.variance_matrix_tensor = self.variance_matrix_tensor.cpu()
             samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.variance_matrix_tensor.detach().numpy(), z_outsource.shape[0]))
             samples = samples.to("cuda:0")
             samples = samples.to(z_outsource.dtype)
             z_outsource = z_outsource + samples
 
-        if save_latent_code_to_external_device:
+        if self.save_latent_code_to_external_device:
             path_captured_latent_code = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
             torch.save(logstd_outsource, f"{path_captured_latent_code}/logstd_outsource_{self.iter_outsource}.pth")
             torch.save(mean_outsource, f"{path_captured_latent_code}/mean_outsource_{self.iter_outsource}.pth")
