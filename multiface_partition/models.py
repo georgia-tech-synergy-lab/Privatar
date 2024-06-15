@@ -61,7 +61,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         prefix_path_captured_latent_code="/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_",
         path_variance_matrix_tensor="/usr/scratch/jianming/Privatar/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_6.0_mutual_bound_1.pth",
         save_latent_code_to_external_device = False,
-        noisy_training = True,
+        apply_gaussian_noise = True,
         res=False,
         non=False,
         bilinear=False,
@@ -96,12 +96,12 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         self.iter_outsource = 0
         self.prefix_path_captured_latent_code = prefix_path_captured_latent_code
         self.save_latent_code_to_external_device = save_latent_code_to_external_device
-        self.noisy_training = noisy_training
+        self.apply_gaussian_noise = apply_gaussian_noise
         if not os.path.exists(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"):
             os.makedirs(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code")
 
         self.mean = np.zeros(256)
-        if noisy_training:
+        if apply_gaussian_noise:
             self.variance_matrix_tensor = torch.load(path_variance_matrix_tensor).cpu()
 
     def img_reorder(self, x, bs, ch, h, w):
@@ -221,7 +221,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
             z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
         
         # Adding model outsource encoder
-        if self.noisy_training:
+        if self.apply_gaussian_noise:
             self.variance_matrix_tensor = self.variance_matrix_tensor.cpu()
             samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.variance_matrix_tensor.detach().numpy(), z_outsource.shape[0]))
             samples = samples.to("cuda:0")
