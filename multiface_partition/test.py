@@ -26,6 +26,10 @@ from models import DeepAppearanceVAE_Horizontal_Partition
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from utils import Renderer, gammaCorrect
+from datetime import datetime
+import wandb
+
+wandb_enable = True
 
 def main(args, camera_config, test_segment):
     local_rank = torch.distributed.get_rank()
@@ -114,6 +118,28 @@ def main(args, camera_config, test_segment):
     )
 
     os.makedirs(args.result_path, exist_ok=True)
+
+    date_time = datetime.now()
+    if wandb_enable:
+        wandb_logger = wandb.init(
+            config={
+                "tex_size": args.tex_size,
+                "mesh_inp_size": args.mesh_inp_size,
+                "n_latent": args.nlatent,
+                "n_cams": n_cams,
+            },
+            project=args.project_name,
+            entity=args.author_name,
+            name=args.arch + "_" + "HorizontalPartition" + str(args.frequency_threshold),
+            group="group0",
+            dir=args.result_path
+            + "_"
+            + args.arch
+            + "_"
+            + date_time.strftime("_%m_%d_%Y"),
+            job_type="testing",
+            reinit=True,
+        )
 
     def run_net(data, iter):
         M = data["M"].cuda()
@@ -275,6 +301,17 @@ def main(args, camera_config, test_segment):
         % (val_idx, vert_loss, tex_loss, screen_loss, kl)
     )
 
+    if wandb_enable:
+        wandb_logger.log(
+            {
+                "val_total_loss": losses["total_loss"].item(),
+                "val_vert_loss": vert_loss,
+                "val_tex_loss": tex_loss,
+                "val_screen_loss": screen_loss,
+                "val_kl": kl,
+            }
+        )
+        
     best_screen_loss = min(best_screen_loss, screen_loss)
     best_tex_loss = min(best_tex_loss, tex_loss)
     best_vert_loss = min(best_vert_loss, vert_loss)
@@ -399,6 +436,18 @@ if __name__ == "__main__":
         type=str,
         default="./runs/experiment",
         help="Directory to output files",
+    )
+    parser.add_argument(
+        "--project_name",
+        type=str,
+        default=None,
+        help="PiCA Partition - Training Task",
+    )
+    parser.add_argument(
+        "--author_name",
+        type=str,
+        default=None,
+        help="Jianming Tong",
     )
     parser.add_argument(
         "--frequency_threshold", type=float, default=19, help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
