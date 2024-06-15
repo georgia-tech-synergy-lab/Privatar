@@ -669,8 +669,6 @@ if __name__ == "__main__":
         "--apply_gaussian_noise", type=bool, default=False, help="Control knob to enable noisy training"
     )
 
-    
-
     experiment_args = parser.parse_args()
     print(experiment_args)
 
