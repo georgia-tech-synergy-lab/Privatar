@@ -526,10 +526,10 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=80, help="Training batch size"
+        "--train_batch_size", type=int, default=1, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=80, help="Validation batch size"
+        "--val_batch_size", type=int, default=1, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
