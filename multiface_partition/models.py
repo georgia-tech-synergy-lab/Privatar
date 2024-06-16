@@ -165,9 +165,9 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         b, n, _ = mesh.shape
         mesh = mesh.view((b, -1))
         # process input avgtex
-        avgtex_interpolate = F.interpolate(avgtex, scale_factor=2, mode='bilinear', align_corners=True)
-        x = avgtex_interpolate
-        x = (x + 1) / 2 * 255
+        # avgtex_interpolate = F.interpolate(avgtex, scale_factor=2, mode='bilinear', align_corners=True)
+        # x = avgtex_interpolate
+        x = (avgtex + 1) / 2 * 255
         if x.shape[1] != 3:
             print("Wrong input, Channel should equals to 3")
             return
@@ -513,7 +513,7 @@ class TextureEncoder_Chnl_Config(nn.Module):
         super(TextureEncoder_Chnl_Config, self).__init__()
         self.downsample = nn.Sequential(
             # ConvDownsample(n_in_chnl, 16, 16, res=res),
-            ConvDownsample(n_in_chnl, 32, 32, res=res),
+            ConvDownsampleSglConv(n_in_chnl, 32, 32, res=res),
             ConvDownsample(32, 64, 64, res=res),
             ConvDownsample(64, 128, 128, res=res),
         )
@@ -541,7 +541,7 @@ class TextureDecoder_Chnl_Config(nn.Module):
             # ConvUpsample(
             #     32, 32, 16, base * (2**4), res=res, use_bilinear=bilinear, non=non
             # ),
-            ConvUpsample(
+            ConvUpsampleSglConv(
                 32,
                 32,
                 n_in_chnl,
@@ -572,6 +572,16 @@ class MLP(nn.Module):
         return out
 
 
+class ConvDownsampleSglConv(nn.Module):
+    def __init__(self, cin, chidden, cout, res=False):
+        super(ConvDownsampleSglConv, self).__init__()
+        self.conv1 = Conv2dWN(cin, cout, 4, 2, padding=1)
+        self.relu = nn.LeakyReLU(0.2, inplace=True)
+
+    def forward(self, x):
+        h = self.relu(self.conv1(x))
+        return h
+    
 class ConvDownsample(nn.Module):
     def __init__(self, cin, chidden, cout, res=False):
         super(ConvDownsample, self).__init__()
@@ -593,6 +603,32 @@ class ConvDownsample(nn.Module):
         return h
 
 
+class ConvUpsampleSglConv(nn.Module):
+    def __init__(
+        self,
+        cin,
+        chidden,
+        cout,
+        feature_size,
+        no_activ=False,
+        res=False,
+        use_bilinear=False,
+        non=False,
+    ):
+        super(ConvUpsampleSglConv, self).__init__()
+        self.conv2 = DeconvTexelBias(
+            chidden, cout, feature_size * 2, use_bilinear=use_bilinear, non=non
+        )
+        self.relu = nn.LeakyReLU(0.2, inplace=True)
+        self.no_activ = no_activ
+
+    def forward(self, x):
+        if self.no_activ:
+            h = self.conv2(x)
+        else:
+            h = self.relu(self.conv2(x))
+        return h
+    
 class ConvUpsample(nn.Module):
     def __init__(
         self,
