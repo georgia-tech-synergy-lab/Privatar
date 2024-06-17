@@ -664,10 +664,10 @@ if __name__ == "__main__":
         "--path_variance_matrix_tensor", type=str, default="/usr/scratch/jianming/Privatar/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_6.0_mutual_bound_1.pth", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
     )
     parser.add_argument(
-        "--save_latent_code_to_external_device", type=bool, default=False, help="Control knob to save latent code to external devices"
+        "--save_latent_code_to_external_device", type=bool, action='store_true', default=False, help="Control knob to save latent code to external devices"
     )
     parser.add_argument(
-        "--apply_gaussian_noise", type=bool, default=False, help="Control knob to enable noisy training"
+        "--apply_gaussian_noise", type=bool, action='store_true', default=False, help="Control knob to enable noisy training"
     )
 
 
