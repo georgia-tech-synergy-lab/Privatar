@@ -13,7 +13,7 @@ path_prefix = path_prefix_uwing2
 average_texture_path = path_prefix + average_texture_path
 
 enc_dec_list = [["dec"]]
-BDCT_threshold = [0.4, 0.8, 1]#, 1, 1.6, 2.4, 3, 4, 5, 6, 19] 
+BDCT_threshold = [0.4]#, 0.8, 1]#, 1, 1.6, 2.4, 3, 4, 5, 6, 19] 
 # BDCT_threshold = [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19] 
 # BDCT_threshold = BDCT_threshold[::-1]
 # BDCT_threshold = BDCT_threshold[2:] # 5, 4, 3 ..
@@ -22,7 +22,7 @@ BDCT_threshold = [0.4, 0.8, 1]#, 1, 1.6, 2.4, 3, 4, 5, 6, 19]
 # scl enable devtoolset-11 bash
 #  --master_port=25678
 for BDCT_thres in BDCT_threshold:
-    result_path = f"/workspace/uwing2/Privatar/training_results/horizontal_partition_{str(BDCT_thres)}"
+    result_path = f"/workspace/uwing2/Privatar/training_results/test-horizontal_partition_{str(BDCT_thres)}"
     pretrained_model_path = f"/workspace/uwing2/Privatar/training_results/horizontal_partition_{str(BDCT_thres)}/best_model.pth"
     if not os.path.exists(result_path):
         os.makedirs(result_path)

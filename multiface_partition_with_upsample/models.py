@@ -662,6 +662,9 @@ class DeconvTexelBias(nn.Module):
             self.bias = nn.Parameter(
                 torch.zeros(1, cout, feature_size[0], feature_size[1])
             )
+        self.cin = cin
+        self.cout = cout
+        self.feature_size = feature_size
 
     def forward(self, x):
         if self.use_bilinear:

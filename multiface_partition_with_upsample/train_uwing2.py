@@ -28,7 +28,7 @@ from utils import Renderer, gammaCorrect
 from datetime import datetime
 import wandb
 
-wandb_enable = True
+wandb_enable = False
 sparsity_enable = False
 
 def weight_kernel_pruning_l1_norm(model, in_bias, prune_ratio):
