@@ -13,7 +13,7 @@ prefix_path_captured_latent_code = ""
 #######
 
 average_texture_path = path_prefix + average_texture_path
-BDCT_threshold = [1.2]#, 0.4, 0.42, 0.45, 0.5, 0.6, 0.7]#, 1.1, 1.2, 3.5, 5]
+BDCT_threshold = [3.5]#, 0.4, 0.42, 0.45, 0.5, 0.6, 0.7]#, 1.1, 1.2, 3.5, 5]
 # BDCT_threshold = [0.1]#, 0.3, 0.35, 0.4, 0.42, 0.45, 0.5, 0.6, 0.7, 1.1, 1.2, 3.5, 5]
 
 # On syenrgy3 machine --- the following codes should be executed

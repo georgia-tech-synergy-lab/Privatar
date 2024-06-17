@@ -104,6 +104,8 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         self.prefix_path_captured_latent_code = prefix_path_captured_latent_code
         self.save_latent_code_to_external_device = save_latent_code_to_external_device
         self.apply_gaussian_noise = apply_gaussian_noise
+        directory_being_created = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
+        print(f"create directory {directory_being_created}")
         if not os.path.exists(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"):
             os.makedirs(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code")
 

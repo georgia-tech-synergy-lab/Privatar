@@ -527,10 +527,10 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=8, help="Training batch size"
+        "--train_batch_size", type=int, default=32, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=8, help="Validation batch size"
+        "--val_batch_size", type=int, default=32, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -670,8 +670,6 @@ if __name__ == "__main__":
         "--apply_gaussian_noise", type=bool, default=False, help="Control knob to enable noisy training"
     )
 
-
-
     experiment_args = parser.parse_args()
     print(experiment_args)
 
@@ -697,7 +695,7 @@ if __name__ == "__main__":
                 "test": camera_ids,
                 "visual": camera_ids[:2]
             }
-        }    
+        }
         # save the config for future use
         os.makedirs("camera_configs", exist_ok=True)
         with open(camera_config_path, 'w') as f:
