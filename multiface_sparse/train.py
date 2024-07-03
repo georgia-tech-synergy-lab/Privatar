@@ -29,7 +29,7 @@ from torch.utils.data.distributed import DistributedSampler
 from utils import Renderer, gammaCorrect
 from datetime import datetime
 
-wandb_enable = False
+wandb_enable = True
 sparsity_enable = True
 
 def weight_kernel_pruning_l1_norm(model, in_bias, prune_ratio):
@@ -562,10 +562,10 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=16, help="Training batch size"
+        "--train_batch_size", type=int, default=28, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=8, help="Validation batch size"
+        "--val_batch_size", type=int, default=28, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -657,7 +657,7 @@ if __name__ == "__main__":
         "--val_num", type=int, default=500, help="Number of iterations for validation"
     )
     parser.add_argument(
-        "--n_worker", type=int, default=8, help="Number of workers loading dataset"
+        "--n_worker", type=int, default=0, help="Number of workers loading dataset"
     )
     parser.add_argument(
         "--pass_thres",

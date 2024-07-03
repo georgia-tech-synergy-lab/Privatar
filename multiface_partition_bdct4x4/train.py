@@ -28,7 +28,7 @@ from utils import Renderer, gammaCorrect
 from datetime import datetime
 import wandb
 
-wandb_enable = False
+wandb_enable = True
 sparsity_enable = False
 
 def weight_kernel_pruning_l1_norm(model, in_bias, prune_ratio):
@@ -192,13 +192,13 @@ def main(args, camera_config, test_segment):
             },
             project=args.project_name,
             entity=args.author_name,
-            name=args.arch + "_" + "HorizontalPartition" + str(args.frequency_threshold).split('.')[-1],
+            name=args.arch + "_" + "hp_" + str(args.frequency_threshold),
             group="group0",
-            dir=args.result_path
-            + "_"
-            + args.arch
-            + "_"
-            + date_time.strftime("_%m_%d_%Y"),
+            dir=args.result_path,
+            # + "_"
+            # + args.arch
+            # + "_"
+            # + date_time.strftime("_%m_%d_%Y"),
             job_type="training",
             reinit=True,
         )
@@ -527,10 +527,10 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=32, help="Training batch size"
+        "--train_batch_size", type=int, default=28, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=32, help="Validation batch size"
+        "--val_batch_size", type=int, default=28, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -556,7 +556,7 @@ if __name__ == "__main__":
         "--mesh_inp_size", type=int, default=21918, help="Input mesh dimension"
     )
     parser.add_argument(
-        "--epochs", type=int, default=5, help="Number of training epochs"
+        "--epochs", type=int, default=1, help="Number of training epochs"
     )
     parser.add_argument(
         "--data_dir",
@@ -664,10 +664,10 @@ if __name__ == "__main__":
         "--path_variance_matrix_tensor", type=str, default="/home/jianming/work/Privatar_prj/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_0_mutual_bound_1.pth", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
     )
     parser.add_argument(
-        "--save_latent_code_to_external_device", type=bool, default=False, help="Control knob to save latent code to external devices"
+        "--save_latent_code_to_external_device", action='store_true', default=False, help="Control knob to save latent code to external devices"
     )
     parser.add_argument(
-        "--apply_gaussian_noise", type=bool, default=False, help="Control knob to enable noisy training"
+        "--apply_gaussian_noise", action='store_true', default=False, help="Control knob to enable noisy training"
     )
 
     experiment_args = parser.parse_args()

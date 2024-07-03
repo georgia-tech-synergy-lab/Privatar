@@ -23,7 +23,7 @@ prefix_path_captured_latent_code = prefix_path_captured_latent_code_synergy3
 
 average_texture_path = path_prefix + average_texture_path
 
-BDCT_threshold = [0.4, 0.8, 1]
+BDCT_threshold = [0.3]
 # BDCT_threshold = [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19] 
 # BDCT_threshold = BDCT_threshold[::-1]
 # BDCT_threshold = BDCT_threshold[2:] # 5, 4, 3 ..
