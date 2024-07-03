@@ -660,13 +660,13 @@ if __name__ == "__main__":
         "--prefix_path_captured_latent_code", type=str, default="/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
     )
     parser.add_argument(
-        "--path_variance_matrix_tensor", type=str, default="/usr/scratch/jianming/Privatar/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_6.0_mutual_bound_1.pth", help="The path to the profiled noise covariance"
+        "--path_variance_matrix_tensor", type=str, default="/home/jianming/work/Privatar_prj/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_0_mutual_bound_1.pth", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
     )
     parser.add_argument(
-        "--save_latent_code_to_external_device", type=bool, default=False, help="Control knob to save latent code to external devices"
+        "--save_latent_code_to_external_device", action='store_true', default=False, help="Control knob to save latent code to external devices"
     )
     parser.add_argument(
-        "--apply_gaussian_noise", type=bool, default=False, help="Control knob to enable noisy training"
+        "--apply_gaussian_noise", action='store_true', default=False, help="Control knob to enable noisy training"
     )
 
     experiment_args = parser.parse_args()
