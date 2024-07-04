@@ -1,0 +1,7 @@
+- multiface_partition: Adopt BDCT filter with block=8, which gives 64 different frequency blocks, this does not have having input upsampling and remove three convolution layers.
+- multiface_partition_bdct4x4: Adopt BDCT filter with block=4, which gives 16 different frequency blocks, this remove 2 convolution layers.
+- multiface_partition_bdct4x4_nohp: Adopt BDCT filter with block=4, which gives 16 different frequency blocks without horizontal partitioning.
+- multiface_partition_with_upsample: Adopt BDCT filter with block=4, which gives 16 different frequency blocks without horizontal partitioning, this does come with having input upsampling such that only two convolution layers get removed.
+- multiface_partition_bdct4x4_nohp: Adopt BDCT filter with block=4, which gives 16 different frequency blocks without horizontal partitioning.
+- multiface_sparse: add sparsity to only decoder of the original VAE model.
+- multiface_quantization: change the bitprecision of data into 8-/16-/32-bit integer for the decoder only.

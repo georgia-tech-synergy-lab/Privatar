@@ -1,17 +1,12 @@
 import os
 
 # Please select one path out of the following three paths based on the server
-path_prefix_god2 = "/home/jianming/work/multiface/"
-path_prefix_synergy3 = "/usr/scratch/jianming/multiface/"
 path_prefix_uwing2 = "/workspace/uwing2/multiface/"
 
-pretrain_model_path_prefix_synergy3 = "/usr/scratch/jianming/Privatar/training_results/horizontal_partition_"
 pretrain_model_path_prefix_uwing2 = "/workspace/uwing2/Privatar/training_results/horizontal_partition_"
 
-result_path_prefix_synergy3 = "/usr/scratch/jianming/Privatar/training_results"
 result_path_prefix_uwing2 = "/workspace/uwing2/Privatar/training_results"
 
-prefix_path_captured_latent_code_synergy3 = "/usr/scratch/jianming/Privatar/testing_results/horizontal_partition_"
 prefix_path_captured_latent_code_uwing2 = "/workspace/uwing2/Privatar/testing_results/horizontal_partition_"
 
 average_texture_path = "dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png"
@@ -26,7 +21,7 @@ prefix_path_captured_latent_code = prefix_path_captured_latent_code_uwing2
 
 average_texture_path = path_prefix + average_texture_path
 
-BDCT_threshold = [1]
+BDCT_threshold = [0.35]
 # BDCT_threshold = [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19] 
 # BDCT_threshold = BDCT_threshold[::-1]
 # BDCT_threshold = BDCT_threshold[2:] # 5, 4, 3 ..

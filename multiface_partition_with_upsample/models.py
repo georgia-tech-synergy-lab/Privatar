@@ -161,7 +161,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         return private_idx,  torch.Tensor(public_idx).to(torch.int64)
 
     def forward(self, avgtex, mesh, view, cams=None):
-# The mesh also needs to be partitioned by two sets of models
+        # The mesh also needs to be partitioned by two sets of models
         b, n, _ = mesh.shape
         mesh = mesh.view((b, -1))
         # process input avgtex
@@ -209,7 +209,6 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         pred_tex_private, pred_mesh = self.dec(z, view)
         pred_tex_private = pred_tex_private.view(bs, ch, -1, block_num, block_num)
         
-        
         mean_outsource, logstd_outsource = self.enc_outsource(public_dct_block)
         mean_outsource = mean_outsource * 0.1
         logstd_outsource = logstd_outsource * 0.01
@@ -241,7 +240,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
 
         # Adding block reconstructions
         pred_tex = torch.zeros(bs, ch, 64, block_num, block_num).to(pred_tex_outsource.device)
-
+        
         for i, idx in enumerate(self.private_idx):
             pred_tex[:, :, idx, :, :] = pred_tex_private[:, :, i, :, :]
         for i, idx in enumerate(self.public_idx):

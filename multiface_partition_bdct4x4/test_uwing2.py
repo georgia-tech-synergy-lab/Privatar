@@ -342,7 +342,7 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=40, help="Validation batch size"
+        "--val_batch_size", type=int, default=10, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -464,10 +464,10 @@ if __name__ == "__main__":
         "--path_variance_matrix_tensor", type=str, default="/usr/scratch/jianming/Privatar/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_6.0_mutual_bound_1.pth", help="The path to the profiled noise covariance"
     )
     parser.add_argument(
-        "--save_latent_code_to_external_device", type=bool, default=False, help="Control knob to save latent code to external devices"
+        "--save_latent_code_to_external_device", action='store_true', default=False, help="Control knob to save latent code to external devices"
     )
     parser.add_argument(
-        "--apply_gaussian_noise", type=bool, default=False, help="Control knob to enable noisy training"
+        "--apply_gaussian_noise", action='store_true', default=False, help="Control knob to enable noisy training"
     )
     parser.add_argument("--model_path", type=str, default=None, help="Model path")
     experiment_args = parser.parse_args()
@@ -519,8 +519,20 @@ if __name__ == "__main__":
         tex_loss,
         vert_loss,
     ) = main(experiment_args, camera_set, test_segment)
-    if torch.distributed.get_rank() == 0:
-        print(
+    # if torch.distributed.get_rank() == 0:
+    print(
+        best_screen_loss,
+        best_tex_loss,
+        best_vert_loss,
+        screen_loss,
+        tex_loss,
+        vert_loss,
+    )
+    f = open(os.path.join(experiment_args.result_path, "result.txt"), "a")
+    f.write("\n")
+    f.write(
+        "Best screen loss %f, best tex loss %f,  best vert loss %f, screen loss %f, tex loss %f, vert_loss %f"
+        % (
             best_screen_loss,
             best_tex_loss,
             best_vert_loss,
@@ -528,17 +540,5 @@ if __name__ == "__main__":
             tex_loss,
             vert_loss,
         )
-        f = open(os.path.join(experiment_args.result_path, "result.txt"), "a")
-        f.write("\n")
-        f.write(
-            "Best screen loss %f, best tex loss %f,  best vert loss %f, screen loss %f, tex loss %f, vert_loss %f"
-            % (
-                best_screen_loss,
-                best_tex_loss,
-                best_vert_loss,
-                screen_loss,
-                tex_loss,
-                vert_loss,
-            )
-        )
-        f.close()
+    )
+    f.close()

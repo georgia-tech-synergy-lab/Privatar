@@ -28,7 +28,7 @@ from utils import Renderer, gammaCorrect
 from datetime import datetime
 import wandb
 
-wandb_enable = False
+wandb_enable = True
 sparsity_enable = False
 
 def weight_kernel_pruning_l1_norm(model, in_bias, prune_ratio):
@@ -147,10 +147,9 @@ def main(args, camera_config, test_segment):
     renderer = Renderer()
 
     # Cannot preload pretrained weights because the Private Path tackles private input images.
-    # if args.model_ckpt is not None:
-    #     print("loading checkpoint from", args.model_ckpt)
-    #     map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
-    #     model.load_state_dict(torch.load(args.model_ckpt, map_location=map_location))
+    if args.model_ckpt is not None:
+        print("loading checkpoint from", args.model_ckpt)
+        model.load_state_dict(torch.load(args.model_ckpt, map_location="cuda:0"))
 
     if sparsity_enable:
         model = model_decoder_pruning(model, args.unified_pruning_ratio)
@@ -181,7 +180,7 @@ def main(args, camera_config, test_segment):
 
     os.makedirs(args.result_path, exist_ok=True)
 
-    date_time = datetime.now()
+    # date_time = datetime.now()
     if wandb_enable:
         wandb_logger = wandb.init(
             config={
@@ -192,13 +191,13 @@ def main(args, camera_config, test_segment):
             },
             project=args.project_name,
             entity=args.author_name,
-            name=args.arch + "_" + "HorizontalPartition" + str(args.frequency_threshold).split('.')[-1],
+            name=args.arch + "_" + "np_bdct4x4_" + str(args.frequency_threshold),
             group="group0",
-            dir=args.result_path
-            + "_"
-            + args.arch
-            + "_"
-            + date_time.strftime("_%m_%d_%Y"),
+            dir=args.result_path,
+            # + "_"
+            # + args.arch
+            # + "_"
+            # + date_time.strftime("_%m_%d_%Y"),
             job_type="training",
             reinit=True,
         )
@@ -555,7 +554,7 @@ if __name__ == "__main__":
         "--mesh_inp_size", type=int, default=21918, help="Input mesh dimension"
     )
     parser.add_argument(
-        "--epochs", type=int, default=10, help="Number of training epochs"
+        "--epochs", type=int, default=1, help="Number of training epochs"
     )
     parser.add_argument(
         "--data_dir",
