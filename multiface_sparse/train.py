@@ -90,7 +90,7 @@ def model_decoder_pruning(model, unified_pruning_ratio):
     model.dec.texture_decoder.upsample[3].conv1.deconv, model.dec.texture_decoder.upsample[3].conv1.bias, prune_indices_7 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[3].conv1.deconv, model.dec.texture_decoder.upsample[3].conv1.bias, unified_pruning_ratio)
     model.dec.texture_decoder.upsample[3].conv2.deconv = iAct_channel_pruning_l1_norm(model.dec.texture_decoder.upsample[3].conv2.deconv, prune_indices_7)
 
-    model.dec.texture_decoder.upsample[3].conv2.deconv,  model.dec.texture_decoder.upsample[3].conv2.bias, prune_indices_8 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[3].conv2.deconv, model.dec.texture_decoder.upsample[3].conv2.bias, unified_pruning_ratio)
+    # model.dec.texture_decoder.upsample[3].conv2.deconv,  model.dec.texture_decoder.upsample[3].conv2.bias, prune_indices_8 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[3].conv2.deconv, model.dec.texture_decoder.upsample[3].conv2.bias, unified_pruning_ratio)
     return model
 
 def main(args, camera_config, test_segment):
@@ -186,7 +186,7 @@ def main(args, camera_config, test_segment):
 
     if sparsity_enable:
         model.module = model_decoder_pruning(model.module, args.unified_pruning_ratio)
-
+    print(model)
     optimizer = optim.Adam(model.module.get_model_params(), args.lr, (0.9, 0.999))
     optimizer_cc = optim.Adam(model.module.get_cc_params(), args.lr, (0.9, 0.999))
     mse = nn.MSELoss()
