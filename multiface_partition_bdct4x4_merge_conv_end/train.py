@@ -22,7 +22,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from dataset import Dataset
-from models import DeepAppearanceVAEHPLayerRed, ConvTranspose2dWN
+from models import DeepAppearanceVAEHPLayerRed
 from torch.utils.data import DataLoader, RandomSampler
 from utils import Renderer, gammaCorrect
 from datetime import datetime
@@ -482,10 +482,10 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=28, help="Training batch size"
+        "--train_batch_size", type=int, default=80, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=28, help="Validation batch size"
+        "--val_batch_size", type=int, default=80, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -511,7 +511,7 @@ if __name__ == "__main__":
         "--mesh_inp_size", type=int, default=21918, help="Input mesh dimension"
     )
     parser.add_argument(
-        "--epochs", type=int, default=3, help="Number of training epochs"
+        "--epochs", type=int, default=10, help="Number of training epochs"
     )
     parser.add_argument(
         "--data_dir",

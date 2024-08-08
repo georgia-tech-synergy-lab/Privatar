@@ -76,7 +76,10 @@ class DeepAppearanceVAEHPLayerRed(nn.Module):
         # self.enc = DeepApperanceEncoder(
         #     tex_size, mesh_inp_size, n_latent=z_dim, res=res
         # )
-
+        
+        self.block_size = n_blocks
+        self.total_frequency_component = self.block_size * self.block_size
+        
         self.n_latent = z_dim
         ntexture_feat = 1024 if tex_size == 1024 else 512
         self.texture_encoder = TextureEncoderLayerRed(res=res)
@@ -92,23 +95,20 @@ class DeepAppearanceVAEHPLayerRed(nn.Module):
         #     tex_size, mesh_inp_size, z_dim=z_dim, res=res, non=non, bilinear=bilinear
         # )
 
-        nhidden = 16384 # if tex_size == 1024 else z_dim * 2 * 2
         self.dec_texture_decoder = TextureDecoderLayerRed(
             tex_size, 64, res=res, non=True, bilinear=bilinear
         )
         self.dec_view_fc = LinearWN(3, 8)
         self.dec_z_fc = LinearWN(z_dim, 256)
         self.dec_mesh_fc = LinearWN(256, mesh_inp_size)
-        self.dec_tex_latent_code_merge = LinearWN(256, 256*self.total_frequency_component)
-        self.dec_texture_fc = LinearWN(256 + 8, nhidden)
+        self.flatten_tex_code_per_freq = 1024
+        # self.dec_tex_latent_code_merge = LinearWN(256, 256*self.total_frequency_component)
+        self.dec_texture_fc = LinearWN(256 + 8, self.flatten_tex_code_per_freq*self.total_frequency_component)
         self.dec_relu = nn.LeakyReLU(0.2, inplace=True)
 
         self.cc = ColorCorrection(n_cams)
 
         # Added Extra Code
-        self.block_size = n_blocks
-        self.total_frequency_component = self.block_size * self.block_size
-        
         self.frequency_threshold = frequency_threshold
         self.private_idx, self.public_idx = self.private_freq_component_thres_based_selection(average_texture_path, frequency_threshold) 
         self.prefix_path_captured_latent_code = prefix_path_captured_latent_code
@@ -124,7 +124,6 @@ class DeepAppearanceVAEHPLayerRed(nn.Module):
 
     def img_reorder(self, x, bs, ch, h, w):
         x = (x + 1) / 2 * 255
-        assert(x.shape[1] == 3, "Wrong input, Channel should equals to 3")
         x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
         x -= 128
         x = x.view(bs * ch, 1, h, w)
@@ -142,6 +141,27 @@ class DeepAppearanceVAEHPLayerRed(nn.Module):
         x = x.view(bs, ch, h, w)
         x = dct.to_rgb(x)#.squeeze(0)
         x = (x / 255.0) * 2 - 1
+        return x
+    
+    def img_reorder_pure_bdct(self, x, bs, ch, h, w):
+        # x = (x + 1) / 2 * 255
+        # x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
+        # x -= 128
+        x = x.view(bs * ch, 1, h, w)
+        x = F.unfold(x, kernel_size=(self.block_size, self.block_size), dilation=1, padding=0, stride=(self.block_size, self.block_size))
+        x = x.transpose(1, 2)
+        x = x.view(bs, ch, -1, self.block_size, self.block_size)
+        return x
+
+    ## Image reordering and testing
+    def img_inverse_reroder_pure_bdct(self, coverted_img, bs, ch, h, w):
+        x = coverted_img.view(bs* ch, -1, self.total_frequency_component)
+        x = x.transpose(1, 2)
+        x = F.fold(x, output_size=(h, w), kernel_size=(self.block_size, self.block_size), stride=(self.block_size, self.block_size))
+        # x += 128
+        x = x.view(bs, ch, h, w)
+        # x = dct.to_rgb(x)#.squeeze(0)
+        # x = (x / 255.0) * 2 - 1
         return x
     
     def private_freq_component_thres_based_selection(self, img_path, mse_threshold):
@@ -171,7 +191,7 @@ class DeepAppearanceVAEHPLayerRed(nn.Module):
 
     ## Image frequency cosine transform
     def dct_transform(self, x, bs, ch, h, w):
-        rerodered_img = self.img_reorder(x, bs, ch, h, w)
+        rerodered_img = self.img_reorder_pure_bdct(x, bs, ch, h, w)
         block_num = h // self.block_size
         dct_block = dct.block_dct(rerodered_img) #BDCT
         dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, self.total_frequency_component).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
@@ -182,7 +202,7 @@ class DeepAppearanceVAEHPLayerRed(nn.Module):
         block_num = h // self.block_size
         idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, self.block_size, self.block_size)
         inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
-        inverse_transformed_img = self.img_inverse_reroder(inverse_dct_block, bs, ch, h, w)
+        inverse_transformed_img = self.img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
         return inverse_transformed_img
 
     def calculate_block_mse(self, downsample_in, freq_block):
@@ -234,12 +254,11 @@ class DeepAppearanceVAEHPLayerRed(nn.Module):
         view_code = self.dec_relu(self.dec_view_fc(view))
         z_code = self.dec_relu(self.dec_z_fc(z))
         feat = torch.cat((view_code, z_code), 1)
-        texture_code = self.dec_relu(self.dec_texture_fc(feat))
-        dec_texture_code_list = self.dec_tex_latent_code_merge(texture_code)
+        dec_texture_code_list = self.dec_relu(self.dec_texture_fc(feat))
 
         dct_block_reorder_dec = torch.empty_like(dct_block_reorder)
         for i in range(self.total_frequency_component):
-            temp_tex = self.dec_texture_decoder(dec_texture_code_list[:, i*256 : (i+1)*256])
+            temp_tex = self.dec_texture_decoder(dec_texture_code_list[:, i*self.flatten_tex_code_per_freq : (i+1)*self.flatten_tex_code_per_freq])
             dct_block_reorder_dec[i, :, :, :, :] = temp_tex
         # pred_tex = self.dec_texture_decoder(texture_code)
         pred_tex = self.dct_inverse_transform(dct_block_reorder_dec, bs, ch, h, w)

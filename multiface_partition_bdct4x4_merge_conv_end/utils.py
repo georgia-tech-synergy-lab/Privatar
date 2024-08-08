@@ -33,8 +33,8 @@ def gammaCorrect(img, dim=-1):
 
 class Renderer:
     def __init__(self):
-        self.glctx = dr.RasterizeGLContext()
-        # self.glctx = dr.RasterizeCudaContext()
+        # self.glctx = dr.RasterizeGLContext()
+        self.glctx = dr.RasterizeCudaContext()
 
     def render(self, M, pos, pos_idx, uv, uv_idx, tex, resolution=[2048, 1334]):
         ones = torch.ones((pos.shape[0], pos.shape[1], 1)).to(pos.device)

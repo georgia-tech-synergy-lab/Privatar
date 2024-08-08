@@ -22,7 +22,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from dataset import Dataset
-from models import DeepAppearanceVAE_Horizontal_Partition, ConvTranspose2dWN
+from models import DeepAppearanceVAEHPLayerRed, ConvTranspose2dWN
 from torch.utils.data import DataLoader, RandomSampler
 from utils import Renderer, gammaCorrect
 from datetime import datetime
@@ -135,10 +135,10 @@ def main(args, camera_config, test_segment):
     n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
     if args.arch == "base":
         # print(f"args.tex_size={args.tex_size}, args.mesh_inp_size={args.mesh_inp_size}, args.nlatent={args.nlatent}, n_cams={n_cams}")
-        model = DeepAppearanceVAE_Horizontal_Partition(
+        model = DeepAppearanceVAEHPLayerRed(
             args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, frequency_threshold=args.frequency_threshold, average_texture_path=args.average_texture_path, prefix_path_captured_latent_code=args.prefix_path_captured_latent_code, path_variance_matrix_tensor=args.path_variance_matrix_tensor, save_latent_code_to_external_device = args.save_latent_code_to_external_device,  apply_gaussian_noise = args.apply_gaussian_noise
         ).to(device)
-        # model = DeepAppearanceVAE_Horizontal_Partition(args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, frequency_threshold=args.frequency_threshold, average_texture_path=args.average_texture_path, prefix_path_captured_latent_code=args.prefix_path_captured_latent_code
+        # model = DeepAppearanceVAEHPLayerRed(args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, frequency_threshold=args.frequency_threshold, average_texture_path=args.average_texture_path, prefix_path_captured_latent_code=args.prefix_path_captured_latent_code
         # ).to(device)
     else:
         raise NotImplementedError
@@ -525,10 +525,10 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=10, help="Training batch size"
+        "--train_batch_size", type=int, default=80, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=10, help="Validation batch size"
+        "--val_batch_size", type=int, default=80, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -554,7 +554,7 @@ if __name__ == "__main__":
         "--mesh_inp_size", type=int, default=21918, help="Input mesh dimension"
     )
     parser.add_argument(
-        "--epochs", type=int, default=1, help="Number of training epochs"
+        "--epochs", type=int, default=10, help="Number of training epochs"
     )
     parser.add_argument(
         "--data_dir",
