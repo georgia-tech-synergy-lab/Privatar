@@ -10,6 +10,7 @@ average_texture_path = "dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_102
 path_prefix = path_prefix_uwing2
 path_variance_matrix_tensor = "/tmp/dummy_path"
 prefix_path_captured_latent_code = "/tmp/dummy"
+best_model_path = "/workspace/uwing2/Privatar/training_results/bdct4x4_hp_merge_pixel_all_local_first_train/best_model.pth"
 # model_ckpt = "/workspace/uwing2/Privatar/training_results/bdct_4x4_hp_0.35_first_train/best_model.pth"
 #######
 
@@ -21,9 +22,9 @@ BDCT_threshold = [0.35]#, 0.3, 0.305, 0.35, 0.4, 0.42, 0.45, 0.5, 0.6, 0.63, 0.7
 # scl enable devtoolset-11 bash
 #  --master_port=25678
 for BDCT_thres in BDCT_threshold:
-    result_path = f"/workspace/uwing2/Privatar/training_results/bdct_4x4_hp_{str(BDCT_thres)}"
+    result_path = f"/workspace/uwing2/Privatar/training_results/bdct4x4_hp_merge_pixel_all_local"
     if not os.path.exists(result_path):
         os.makedirs(result_path)
     
-    print(f'python3 train_uwing2.py --data_dir {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS --krt_dir {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/KRT --framelist_train {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/frame_list.txt --framelist_test {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/frame_list.txt --average_texture_path {average_texture_path} --result_path {result_path} --test_segment "./test_segment.json" --lambda_screen 1  --arch base --frequency_threshold {BDCT_thres} --project_name bdct4x4_hp_training --author_name jimmytong --path_variance_matrix_tensor {path_variance_matrix_tensor} --prefix_path_captured_latent_code {path_variance_matrix_tensor}')
-    os.system(f'python3 train_uwing2.py --data_dir {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS --krt_dir {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/KRT --framelist_train {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/frame_list.txt --framelist_test {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/frame_list.txt --average_texture_path {average_texture_path} --result_path {result_path} --test_segment "./test_segment.json" --lambda_screen 1  --arch base --frequency_threshold {BDCT_thres} --project_name bdct4x4_hp_training --author_name jimmytong --path_variance_matrix_tensor {path_variance_matrix_tensor} --prefix_path_captured_latent_code {path_variance_matrix_tensor}')
+    print(f'python3 train_uwing2.py --data_dir {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS --krt_dir {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/KRT --framelist_train {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/frame_list.txt --framelist_test {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/frame_list.txt --average_texture_path {average_texture_path} --result_path {result_path} --test_segment "./test_segment.json" --lambda_screen 1  --arch base --frequency_threshold {BDCT_thres} --project_name bdct4x4_hp_training --author_name jimmytong --path_variance_matrix_tensor {path_variance_matrix_tensor} --prefix_path_captured_latent_code {path_variance_matrix_tensor} --model_ckpt {best_model_path}')
+    os.system(f'python3 train_uwing2.py --data_dir {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS --krt_dir {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/KRT --framelist_train {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/frame_list.txt --framelist_test {path_prefix_uwing2}dataset/m--20180227--0000--6795937--GHS/frame_list.txt --average_texture_path {average_texture_path} --result_path {result_path} --test_segment "./test_segment.json" --lambda_screen 1  --arch base --frequency_threshold {BDCT_thres} --project_name bdct4x4_hp_training --author_name jimmytong --path_variance_matrix_tensor {path_variance_matrix_tensor} --prefix_path_captured_latent_code {path_variance_matrix_tensor} --model_ckpt {best_model_path}')

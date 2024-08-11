@@ -293,18 +293,38 @@ def main(args, camera_config, test_segment):
                     Image.fromarray(save_pred_image[_batch_id]).save(
                         os.path.join(args.result_path, f"pred_{tag}_{_batch_id}.png")
                     )
+        # # apply gamma correction
+        # save_gt_image = gt_screen[-1].detach().cpu().numpy().astype(np.uint8)
+        # save_gt_image = (255 * gammaCorrect(save_gt_image / 255.0)).astype(np.uint8)
+        # Image.fromarray(save_gt_image).save(os.path.join(args.result_path, "gt_%s.png" % tag))
+        # # apply gamma correction
+        # save_gt_tex_image = gt_tex[-1].detach().permute((1, 2, 0)).cpu().numpy().astype(np.uint8)
+        # save_gt_tex_image = (255 * gammaCorrect(save_gt_tex_image / 255.0)).astype(np.uint8)
+        # Image.fromarray(save_gt_tex_image).save(os.path.join(args.result_path, "gt_tex_%s.png" % tag))
+        # # apply gamma correction
+        # save_pred_tex_image = pred_tex[-1].detach().permute((1, 2, 0)).cpu().numpy().astype(np.uint8)
+        # save_pred_tex_image = (255 * gammaCorrect(save_pred_tex_image / 255.0)).astype(np.uint8)
+        # Image.fromarray(save_pred_tex_image).save(os.path.join(args.result_path, "pred_tex_%s.png" % tag))
+
+        save_gt_image = gt_screen.detach().cpu().numpy().astype(np.uint8)
+        if len(save_gt_image.shape) == 4:
+            for _batch_id in range(save_gt_image.shape[0]):
+                save_gt_image[_batch_id] = (255 * gammaCorrect(save_gt_image[_batch_id] / 255.0)).astype(np.uint8)
+                Image.fromarray(save_gt_image[_batch_id]).save(os.path.join(args.result_path, f"gt_{tag}_{_batch_id}.png"))
+        
         # apply gamma correction
-        save_gt_image = gt_screen[-1].detach().cpu().numpy().astype(np.uint8)
-        save_gt_image = (255 * gammaCorrect(save_gt_image / 255.0)).astype(np.uint8)
-        Image.fromarray(save_gt_image).save(os.path.join(args.result_path, "gt_%s.png" % tag))
-        # apply gamma correction
-        save_gt_tex_image = gt_tex[-1].detach().permute((1, 2, 0)).cpu().numpy().astype(np.uint8)
-        save_gt_tex_image = (255 * gammaCorrect(save_gt_tex_image / 255.0)).astype(np.uint8)
-        Image.fromarray(save_gt_tex_image).save(os.path.join(args.result_path, "gt_tex_%s.png" % tag))
-        # apply gamma correction
-        save_pred_tex_image = pred_tex[-1].detach().permute((1, 2, 0)).cpu().numpy().astype(np.uint8)
-        save_pred_tex_image = (255 * gammaCorrect(save_pred_tex_image / 255.0)).astype(np.uint8)
-        Image.fromarray(save_pred_tex_image).save(os.path.join(args.result_path, "pred_tex_%s.png" % tag))
+        save_gt_tex_image = gt_tex.detach().permute((0,2,3,1)).cpu().numpy().astype(np.uint8)
+        if len(save_gt_tex_image.shape) == 4:
+            for _batch_id in range(save_gt_tex_image.shape[0]):
+                save_gt_tex_image[_batch_id] = (255 * gammaCorrect(save_gt_tex_image[_batch_id] / 255.0)).astype(np.uint8)
+                Image.fromarray(save_gt_tex_image[_batch_id]).save(os.path.join(args.result_path, f"gt_tex_{tag}_{_batch_id}.png"))
+            
+        
+        save_pred_tex_image = pred_tex.detach().permute((0,2,3,1)).cpu().numpy().astype(np.uint8)
+        if len(save_pred_tex_image.shape) == 4:
+            for _batch_id in range(save_pred_tex_image.shape[0]):
+                save_pred_tex_image[_batch_id] = (255 * gammaCorrect(save_pred_tex_image[_batch_id] / 255.0)).astype(np.uint8)
+                Image.fromarray(save_pred_tex_image[_batch_id]).save(os.path.join(args.result_path, f"pred_tex_{tag}_{_batch_id}.png"))
 
         if args.arch == "warp":
             warp = output["warp_field"]
@@ -322,6 +342,7 @@ def main(args, camera_config, test_segment):
             Image.fromarray(
                 grid_img[-1].detach().permute((1, 2, 0)).cpu().numpy().astype(np.uint8)
             ).save(os.path.join(args.result_path, "warp_grid_%s.png" % tag))
+
 
     prev_loss = 1e8
     prev_vert_loss = 1e8
@@ -525,10 +546,10 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=80, help="Training batch size"
+        "--train_batch_size", type=int, default=100, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=80, help="Validation batch size"
+        "--val_batch_size", type=int, default=100, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
