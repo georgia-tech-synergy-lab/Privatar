@@ -24,6 +24,7 @@ framelist_train = f"/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/se
 subject_id = data_dir.split("--")[-2]
 camera_config_path = f"camera_configs/camera-split-config_{subject_id}.json"
 result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
+path_loss_weight_mask = "/home/jianming/work/Privatar_prj/multiface_partition_bdct4x4/loss_weight_mask.png"
 
 if server == "uwing2":
     data_dir = f"/workspace/uwing2/multiface/dataset/m--20180227--0000--6795937--GHS"
@@ -32,6 +33,7 @@ if server == "uwing2":
     subject_id = data_dir.split("--")[-2]
     camera_config_path = f"camera_configs/camera-split-config_{subject_id}.json"
     result_path = "/workspace/uwing2/Privatar/custom_scripts/nn_attack/"
+    path_loss_weight_mask = "/workspace/uwing2/Privatar/multiface_partition_bdct4x4_merge_conv_end/loss_weight_mask.png"
 
 if os.path.exists(camera_config_path):
     print(f"camera config file for {subject_id} exists, loading...")
@@ -94,7 +96,7 @@ test_loader = DataLoader(
 renderer = Renderer()
 
 mse = nn.MSELoss()
-loss_weight_mask = cv2.flip(cv2.imread("/home/jianming/work/Privatar_prj/multiface_partition_bdct4x4/loss_weight_mask.png"), 0)
+loss_weight_mask = cv2.flip(cv2.imread(path_loss_weight_mask), 0)
 loss_weight_mask = loss_weight_mask / loss_weight_mask.max()
 loss_weight_mask = (
     torch.tensor(loss_weight_mask).permute(2, 0, 1).unsqueeze(0).float().to("cuda:0")
@@ -160,7 +162,6 @@ for i, data in enumerate(test_loader):
     width_render = width_render - (width_render % 8)
     refer_photo_short = torch.Tensor(refer_photo)[:, :, :width_render, :]
     collect_overall_refer_components.append(refer_photo_short)
-    break
 
 print(f"[Done] creating reference photo list, total reference image {len(collect_overall_refer_components)}")
 
@@ -168,7 +169,7 @@ save_frequency_component_to_disk = False
 print(len(test_loader)) # number of expression list * number of total cameras
 
 for j, data_test in enumerate(test_loader):
-    for i in tqdm(len(collect_overall_refer_components)):
+    for i in tqdm(range(len(collect_overall_refer_components))):
         for freq_base_id in range(1,16):
             M = data_test["M"].cuda()
             gt_tex = data_test["tex"].cuda()
