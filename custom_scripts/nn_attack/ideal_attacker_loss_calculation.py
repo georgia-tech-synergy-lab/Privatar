@@ -2,7 +2,7 @@ import os
 import cv2
 import json 
 import glob
-import tqdm
+from tqdm import tqdm
 import torch
 import numpy as np
 import torch.nn as nn
@@ -12,16 +12,26 @@ from torch.utils.data import DataLoader, SequentialSampler
 from library import *
 
 ## Input Configurations
+server = "uwing2"
+
+# god 2
 tex_size = 1024
 val_batch_size = 1
 n_worker = 1
-path_prefix = "/home/jianming/work/multiface/"
 data_dir = f"/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS"
 krt_dir = f"/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT"
 framelist_train = f"/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/selected_expression_frame_list.txt"
 subject_id = data_dir.split("--")[-2]
 camera_config_path = f"camera_configs/camera-split-config_{subject_id}.json"
 result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
+
+if server == "uwing2":
+    data_dir = f"/workspace/uwing2/multiface/dataset/m--20180227--0000--6795937--GHS"
+    krt_dir = f"/workspace/uwing2/multiface/dataset/m--20180227--0000--6795937--GHS/KRT"
+    framelist_train = f"/workspace/uwing2/Privatar/custom_scripts/nn_attack/selected_expression_frame_list.txt"
+    subject_id = data_dir.split("--")[-2]
+    camera_config_path = f"camera_configs/camera-split-config_{subject_id}.json"
+    result_path = "/workspace/uwing2/Privatar/custom_scripts/nn_attack/"
 
 if os.path.exists(camera_config_path):
     print(f"camera config file for {subject_id} exists, loading...")
@@ -150,6 +160,7 @@ for i, data in enumerate(test_loader):
     width_render = width_render - (width_render % 8)
     refer_photo_short = torch.Tensor(refer_photo)[:, :, :width_render, :]
     collect_overall_refer_components.append(refer_photo_short)
+    break
 
 print(f"[Done] creating reference photo list, total reference image {len(collect_overall_refer_components)}")
 
