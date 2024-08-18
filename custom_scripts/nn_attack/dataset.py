@@ -98,6 +98,7 @@ class Dataset(torch.utils.data.Dataset):
         check_path(framelistpath)
 
         framelist = np.genfromtxt(framelistpath, dtype=np.str)
+        print(framelist)
         self.mesh_topology = None
 
         # set cameras
@@ -110,7 +111,7 @@ class Dataset(torch.utils.data.Dataset):
         if camset is not None:
             self.cameras = camset
         self.allcameras = sorted(self.cameras)
-
+        print(self.cameras)
         # load train list (but check that images are not dropped!)
         self.framelist = []
 
