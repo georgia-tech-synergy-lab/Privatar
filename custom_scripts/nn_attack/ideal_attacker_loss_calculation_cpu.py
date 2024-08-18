@@ -150,7 +150,6 @@ for i, data in enumerate(test_loader):
     width_render = width_render - (width_render % 8)
     refer_photo_short = torch.Tensor(refer_photo)[:, :, :width_render, :]
     collect_overall_refer_components.append(refer_photo_short)
-    break
 
 print(f"[Done] creating reference photo list, total reference image {len(collect_overall_refer_components)}")
 
