@@ -2,7 +2,7 @@ import os
 import cv2
 import json 
 import glob
-import tqdm
+from tqdm import tqdm
 import torch
 import numpy as np
 import torch.nn as nn
@@ -150,6 +150,7 @@ for i, data in enumerate(test_loader):
     width_render = width_render - (width_render % 8)
     refer_photo_short = torch.Tensor(refer_photo)[:, :, :width_render, :]
     collect_overall_refer_components.append(refer_photo_short)
+    break
 
 print(f"[Done] creating reference photo list, total reference image {len(collect_overall_refer_components)}")
 
@@ -157,7 +158,7 @@ save_frequency_component_to_disk = False
 print(len(test_loader)) # number of expression list * number of total cameras
 
 for j, data_test in enumerate(test_loader):
-    for i in tqdm(len(collect_overall_refer_components)):
+    for i in tqdm(range(len(collect_overall_refer_components))):
         for freq_base_id in range(1,16):
             M = data_test["M"].to(device)
             gt_tex = data_test["tex"].to(device)
