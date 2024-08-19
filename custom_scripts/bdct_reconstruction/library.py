@@ -23,7 +23,6 @@ from dataset import Dataset
 from PIL import Image, ImageFile
 from torch.utils.data import DataLoader, SequentialSampler
 
-
 block_size = 4
 total_frequency_components = block_size * block_size
 check_reconstruct_img = True
@@ -158,7 +157,6 @@ def dct_transform_overall_no_extra_standard(x, bs, ch, h, w):
     inverse_transformed_img = img_inverse_reroder_no_extra_standard(inverse_dct_block, bs, ch, h, w)
     print(torch.allclose(inverse_transformed_img, back_input, atol=1e-4))
     return inverse_transformed_img
-
 
 ## Image frequency cosine transform --> THE ONE used in actual reconstruction!!
 def dct_transform_overall_pure_bdct(x, bs, ch, h, w):
@@ -299,9 +297,10 @@ tex_size = 1024
 val_batch_size = 1
 n_worker = 1
 path_prefix = "/home/jianming/work/multiface/"
-data_dir = f"{path_prefix}dataset/m--20180227--0000--6795937--GHS"
-krt_dir = f"{path_prefix}dataset/m--20180227--0000--6795937--GHS/KRT"
-framelist_train = f"/home/jianming/work/Privatar_prj/custom_scripts/bdct_reconstruction/single_expression_frame_list.txt"
+data_dir = f"/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS"
+krt_dir = f"/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT"
+# framelist_train = f"/home/jianming/work/Privatar_prj/custom_scripts/bdct_reconstruction/single_expression_frame_list.txt"
+framelist_train = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/selected_expression_frame_list.txt"
 subject_id = data_dir.split("--")[-2]
 camera_config_path = f"camera_configs/camera-split-config_{subject_id}.json"
 result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
