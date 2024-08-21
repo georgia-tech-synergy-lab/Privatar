@@ -10,10 +10,14 @@ from dataset import Dataset
 from PIL import Image, ImageFile
 from torch.utils.data import DataLoader, SequentialSampler
 from library import *
+from models import DeepAppearanceVAE_Horizontal_Partition, ConvTranspose2dWN
 
 ## Input Configurations
 server = "uwing2"
 noise_amount = 0
+frequency_threshold = 0.1
+device = "cuda:0"
+noise_variance_path = None
 
 # god 2
 tex_size = 1024
@@ -26,6 +30,8 @@ subject_id = data_dir.split("--")[-2]
 camera_config_path = f"camera_configs/camera-split-config_{subject_id}.json"
 result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
 path_loss_weight_mask = "/home/jianming/work/Privatar_prj/multiface_partition_bdct4x4/loss_weight_mask.png"
+average_texture_path = "/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png"
+img_path = "/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png"
 
 if server == "uwing2":
     data_dir = f"/workspace/uwing2/multiface/dataset/m--20180227--0000--6795937--GHS"
@@ -35,6 +41,8 @@ if server == "uwing2":
     camera_config_path = f"camera_configs/camera-split-config_{subject_id}.json"
     result_path = "/workspace/uwing2/Privatar/custom_scripts/nn_attack/"
     path_loss_weight_mask = "/workspace/uwing2/Privatar/multiface_partition_bdct4x4_merge_conv_end/loss_weight_mask.png"
+    average_texture_path = "/workspace/uwing2/multiface/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png"
+    img_path = "/workspace/uwing2/multiface/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png"
 
 if os.path.exists(camera_config_path):
     print(f"camera config file for {subject_id} exists, loading...")
@@ -77,12 +85,12 @@ texstd = dataset_test.texstd
 texmean = cv2.resize(dataset_test.texmean, (tex_size, tex_size))
 texmin = cv2.resize(dataset_test.texmin, (tex_size, tex_size))
 texmax = cv2.resize(dataset_test.texmax, (tex_size, tex_size))
-texmean = torch.tensor(texmean).permute((2, 0, 1))[None, ...].to("cuda:0")
+texmean = torch.tensor(texmean).permute((2, 0, 1))[None, ...].to(device)
 vertstd = dataset_test.vertstd
 vertmean = (
     torch.tensor(dataset_test.vertmean, dtype=torch.float32)
     .view((1, -1, 3))
-    .to("cuda:0")
+    .to(device)
 )
 
 test_sampler = SequentialSampler(dataset_test)
@@ -100,10 +108,15 @@ mse = nn.MSELoss()
 loss_weight_mask = cv2.flip(cv2.imread(path_loss_weight_mask), 0)
 loss_weight_mask = loss_weight_mask / loss_weight_mask.max()
 loss_weight_mask = (
-    torch.tensor(loss_weight_mask).permute(2, 0, 1).unsqueeze(0).float().to("cuda:0")
+    torch.tensor(loss_weight_mask).permute(2, 0, 1).unsqueeze(0).float().to(device)
 )
 
 loss_mask = loss_weight_mask.repeat(1, 1, 1, 1)
+
+mesh_inp_size = 21918
+nlatent = 256
+n_cams = len(set(dataset_test.cameras))
+
 
 def gammaCorrect(img, dim=-1):
     if dim == -1:
@@ -122,9 +135,10 @@ def gammaCorrect(img, dim=-1):
     
     return correct_img
 
+
 def save_img(data, output, tag=""):
-    gt_screen = data["photo"].to("cuda:0") * 255
-    gt_tex = data["tex"].to("cuda:0") * texstd + texmean
+    gt_screen = data["photo"].to(device) * 255
+    gt_tex = data["tex"].to(device) * texstd + texmean
     pred_tex = torch.clamp(output["pred_tex"] * 255, 0, 255)
     if output["pred_screen"] is not None:
         pred_screen = torch.clamp(output["pred_screen"] * 255, 0, 255)
@@ -149,10 +163,44 @@ def save_img(data, output, tag=""):
     save_pred_tex_image = (255 * gammaCorrect(save_pred_tex_image / 255.0)).astype(np.uint8)
     Image.fromarray(save_pred_tex_image).save(os.path.join(result_path, "pred_tex_%s.png" % tag))
 
+
+def private_freq_component_thres_based_selection(img_path, mse_threshold):
+    # The original input image comes with it and I disable it to reduce the computation overhead.
+    image = Image.open(img_path).convert('RGB')
+    transform = transforms.Compose([
+        transforms.ToTensor()
+    ])
+    x = transform(image).unsqueeze(0)
+    total_frequency_component = 16
+    back_input = x
+    bs, ch, h, w = x.shape
+    block_num = h // block_size
+    x = img_reorder(x, bs, ch, h, w)
+    dct_block = dct.block_dct(x) # BDCT
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 1, 4, 2, 3) # into (bs, ch, 16, block_num, block_num)
+    loss_vector = calculate_block_mse(back_input, dct_block_reorder)
+    # Split all component based on the frequency
+    private_idx = torch.where(loss_vector > mse_threshold)[0]
+    public_idx = []
+    all_possible_idx = [i for i in range(total_frequency_component)]
+    for element in all_possible_idx:
+        if element not in private_idx:
+            public_idx.append(element)
+
+    return private_idx,  torch.Tensor(public_idx).to(torch.int64)
+
+private_idx, public_idx = private_freq_component_thres_based_selection(img_path, frequency_threshold)
+
 attack_loss_mm = np.zeros((len(test_loader), len(test_loader), 15))
 overall_screen_loss = np.zeros((len(test_loader), 15))
 overall_tex_loss = np.zeros((len(test_loader), 15))
 
+## Load pretrained NN model
+model = DeepAppearanceVAE_Horizontal_Partition(
+            tex_size, mesh_inp_size, n_latent=nlatent, n_cams=n_cams, frequency_threshold=frequency_threshold, average_texture_path=average_texture_path, prefix_path_captured_latent_code="", path_variance_matrix_tensor="", save_latent_code_to_external_device = False,  apply_gaussian_noise = False
+        ).to(device)
+
+## Load reference images
 collect_overall_refer_components = []
 print("calculate reference photo")
 for i, data in enumerate(test_loader):
@@ -168,8 +216,8 @@ print(f"[Done] creating reference photo list, total reference image {len(collect
 save_frequency_component_to_disk = False
 print(len(test_loader)) # number of expression list * number of total cameras
 
-for j, data_test in enumerate(test_loader):
-    for i in tqdm(range(len(collect_overall_refer_components))):
+for j, data_test in tqdm(enumerate(test_loader)):
+    for i in range(len(collect_overall_refer_components)):
         for freq_base_id in range(1,16):
             M = data_test["M"].cuda()
             gt_tex = data_test["tex"].cuda()
@@ -201,9 +249,9 @@ for j, data_test in enumerate(test_loader):
             tex_loss = mse(pred_tex * mask, gt_tex * mask) * (255**2) / (texstd**2)
             # From vertex to photo.
 
-            pred_verts = verts.to("cuda:0") * vertstd + vertmean.to("cuda:0")
-            pred_tex = (pred_tex.to("cuda:0") * texstd + texmean.to("cuda:0")) / 255.0
-            gt_tex = (gt_tex.to("cuda:0") * texstd + texmean.to("cuda:0")) / 255.0
+            pred_verts = verts.to(device) * vertstd + vertmean.to(device)
+            pred_tex = (pred_tex.to(device) * texstd + texmean.to(device)) / 255.0
+            gt_tex = (gt_tex.to(device) * texstd + texmean.to(device)) / 255.0
 
             screen_mask, rast_out = renderer.render(
                 M, pred_verts, vert_ids, uvs, uv_ids, loss_mask,  [height_render, width_render] #args.resolution

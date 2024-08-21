@@ -20,7 +20,6 @@ from PIL import Image
 import torchvision.transforms as transforms
 
 
-
 # prefix_path_captured_latent_code = prefix_path_captured_latent_code_god2
 threshold_list = [0.1, 0.3, 0.35, 0.4, 0.42, 0.45, 0.5, 0.6, 0.7, 1.1, 1.2, 3.5, 5]
 

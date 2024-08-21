@@ -28,7 +28,7 @@ from utils import Renderer, gammaCorrect
 from datetime import datetime
 import wandb
 
-wandb_enable = False
+wandb_enable = True
 
 def main(args, camera_config, test_segment):
     # local_rank = torch.distributed.get_rank()
@@ -517,7 +517,7 @@ if __name__ == "__main__":
         "--data_dir",
         type=str,
         default="/mnt/captures/zhengningyuan/m--20180226--0000--6674443--GHS",
-        help="Directory to dataset root",
+        help="Directory to dataset root",   
     )
     parser.add_argument(
         "--krt_dir",

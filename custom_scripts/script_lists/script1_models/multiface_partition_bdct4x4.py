@@ -6,6 +6,8 @@
 
 import math
 from os import wait
+import os
+import os
 
 import numpy as np
 import torch
@@ -13,7 +15,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # Custom Inserted
-import os
 from torchjpeg import dct
 from PIL import Image
 import torchvision.transforms as transforms
@@ -49,9 +50,8 @@ public_idx = []
 for element in all_possible_idx:
     if element not in private_idx:
         public_idx.append(element)
-    
 
-class DeepAppearanceVAE_hp_freq_seq(nn.Module):
+class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
     def __init__(
         self,
         tex_size=1024,
@@ -70,55 +70,47 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
         non=False,
         bilinear=False,
     ):
-        super(DeepAppearanceVAE_hp_freq_seq, self).__init__()
+        super(DeepAppearanceVAE_Horizontal_Partition, self).__init__()
+        
         z_dim = n_latent if mode == "vae" else n_latent * 2
         self.mode = mode
-        # self.enc = DeepApperanceEncoder(
-        #     tex_size, mesh_inp_size, n_latent=z_dim, res=res
-        # )
-
-        self.n_latent = z_dim
-        ntexture_feat = 2048 if tex_size == 1024 else 512
-        self.texture_encoder = TextureEncoder(res=res)
-        self.texture_fc = LinearWN(ntexture_feat, 256)
-        self.mesh_fc = LinearWN(mesh_inp_size, 256) # The Mesh based encoder.
-        self.fc = LinearWN(512, z_dim * 2)
-        self.relu = nn.LeakyReLU(0.2, inplace=True)
-        self.apply(lambda x: glorot(x, 0.2))
-        glorot(self.fc, 1.0)
-
-        # self.dec = DeepAppearanceDecoder(
-        #     tex_size, mesh_inp_size, z_dim=z_dim, res=res, non=non, bilinear=bilinear
-        # )
-
-        nhidden = z_dim * 4 * 4 # if tex_size == 1024 else z_dim * 2 * 2
-        self.dec_texture_decoder = TextureDecoder(
-            tex_size, int(z_dim/2), res=res, non=True, bilinear=bilinear
-        )
-        self.dec_view_fc = LinearWN(3, 8)
-        self.dec_z_fc = LinearWN(z_dim, 256)
-        self.dec_mesh_fc = LinearWN(256, mesh_inp_size)
-        self.dec_texture_fc = LinearWN(256 + 8, nhidden)
-        self.dec_relu = nn.LeakyReLU(0.2, inplace=True)
-
-        self.cc = ColorCorrection(n_cams)
-
-        # Added Extra Code
+        self.interpolation_ratio = 2
+        tex_size = tex_size * self.interpolation_ratio // n_blocks 
         self.block_size = n_blocks
         self.total_frequency_component = self.block_size * self.block_size
         
         self.frequency_threshold = frequency_threshold
-        self.private_idx, self.public_idx = self.private_freq_component_thres_based_selection(average_texture_path, frequency_threshold) 
+        self.private_idx, self.public_idx = self.private_freq_component_thres_based_selection(average_texture_path, frequency_threshold) # ToDo
+        
+        self.private_total_in_chnl = len(self.private_idx) * 3 # 3 indicates RGB three channels of each frequency broken down
+        self.public_total_in_chnl = len(self.public_idx) * 3 # 3 indicates RGB three channels of each frequency broken down
+        print(f"public_total_in_chnl={self.public_total_in_chnl}, private_total_in_chnl={self.private_total_in_chnl}")
+        self.enc = DeepApperanceEncoderChnlConfig(
+            tex_size, mesh_inp_size, n_latent=z_dim, n_in_chnl=self.private_total_in_chnl, res=res
+        )
+        self.dec = DeepAppearanceDecoderChnlConfig(
+            tex_size, mesh_inp_size, z_dim=z_dim, n_in_chnl=self.private_total_in_chnl, res=res, non=non, bilinear=bilinear
+        )
+        self.enc_outsource = DeepApperanceEncoderNoMeshChnlConfig(
+            tex_size, mesh_inp_size, n_latent=z_dim, n_in_chnl=self.public_total_in_chnl, res=res
+        )
+        self.dec_outsource = DeepAppearanceDecoderNoMeshChnlConfig(
+            tex_size, mesh_inp_size, z_dim=z_dim, n_in_chnl=self.public_total_in_chnl, res=res, non=non, bilinear=bilinear
+        )
+        self.cc = ColorCorrection(n_cams)
+        self.iter = 0
+        self.iter_outsource = 0
         self.prefix_path_captured_latent_code = prefix_path_captured_latent_code
         self.save_latent_code_to_external_device = save_latent_code_to_external_device
         self.apply_gaussian_noise = apply_gaussian_noise
-        self.mean = np.zeros(256)
-        if apply_gaussian_noise:
-            self.variance_matrix_tensor = torch.load(path_variance_matrix_tensor).cpu()
         directory_being_created = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
         print(f"create directory {directory_being_created}")
         if not os.path.exists(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"):
             os.makedirs(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code")
+
+        self.mean = np.zeros(256)
+        if apply_gaussian_noise:
+            self.variance_matrix_tensor = torch.load(path_variance_matrix_tensor).cpu()
 
     def img_reorder(self, x, bs, ch, h, w):
         x = (x + 1) / 2 * 255
@@ -126,44 +118,31 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
         x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
         x -= 128
         x = x.view(bs * ch, 1, h, w)
-        x = F.unfold(x, kernel_size=(self.block_size, self.block_size), dilation=1, padding=0, stride=(self.block_size, self.block_size))
+        x = F.unfold(x, kernel_size=(self.block_size, self.block_size), dilation=1, padding=0, stride=(self.block_size,self.block_size))
         x = x.transpose(1, 2)
         x = x.view(bs, ch, -1, self.block_size, self.block_size)
         return x
-
+    
     ## Image reordering and testing
     def img_inverse_reroder(self, coverted_img, bs, ch, h, w):
         x = coverted_img.view(bs* ch, -1, self.total_frequency_component)
         x = x.transpose(1, 2)
-        x = F.fold(x, output_size=(h, w), kernel_size=(self.block_size, self.block_size), stride=(self.block_size, self.block_size))
+        x = F.fold(x, output_size=(h, w), kernel_size=(self.block_size,self.block_size), stride=(self.block_size,self.block_size))
         x += 128
         x = x.view(bs, ch, h, w)
         x = dct.to_rgb(x)#.squeeze(0)
         x = (x / 255.0) * 2 - 1
         return x
 
-    def img_reorder_pure_bdct(self, x, bs, ch, h, w):
-        # x = (x + 1) / 2 * 255
-        assert(x.shape[1] == 3, "Wrong input, Channel should equals to 3")
-        # x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
-        # x -= 128
-        x = x.view(bs * ch, 1, h, w)
-        x = F.unfold(x, kernel_size=(self.block_size, self.block_size), dilation=1, padding=0, stride=(self.block_size, self.block_size))
-        x = x.transpose(1, 2)
-        x = x.view(bs, ch, -1, self.block_size, self.block_size)
-        return x
+    def calculate_block_mse(self, downsample_in, freq_block):
+        downsample_img = transforms.Resize(size=int(downsample_in.shape[-1]/self.block_size))(downsample_in)
+        assert(downsample_img.shape == freq_block[:,:,0,:,:].shape, "downsample input shape does not match the shape of post-BDCT component")
+        loss_vector = torch.zeros(freq_block.shape[2])
+        for i in range(freq_block.shape[2]):
+            # calculate the MSE between each frequency components and given input downsampled images
+            loss_vector[i] = F.mse_loss(downsample_img, freq_block[:,:,i,:,:])
+        return loss_vector
 
-    ## Image reordering and testing
-    def img_inverse_reroder_pure_bdct(self, coverted_img, bs, ch, h, w):
-        x = coverted_img.view(bs* ch, -1, self.total_frequency_component)
-        x = x.transpose(1, 2)
-        x = F.fold(x, output_size=(h, w), kernel_size=(self.block_size, self.block_size), stride=(self.block_size, self.block_size))
-        # x += 128
-        x = x.view(bs, ch, h, w)
-        # x = dct.to_rgb(x)#.squeeze(0)
-        # x = (x / 255.0) * 2 - 1
-        return x
-        
     def private_freq_component_thres_based_selection(self, img_path, mse_threshold):
         # The original input image comes with it and I disable it to reduce the computation overhead.
         image = Image.open(img_path).convert('RGB')
@@ -189,57 +168,33 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
 
         return private_idx,  torch.Tensor(public_idx).to(torch.int64)
 
-    ## Image frequency cosine transform
-    def dct_transform(self, x, bs, ch, h, w):
-        rerodered_img = self.img_reorder_pure_bdct(x, bs, ch, h, w)
-        block_num = h // self.block_size
-        dct_block = dct.block_dct(rerodered_img) #BDCT
-        dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, self.total_frequency_component).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
-        # A given frequency reference is "dct_block_reorder[freq_id, :, :, :, :]"
-        return dct_block_reorder
-
-    def dct_inverse_transform(self, dct_block_reorder,bs, ch, h, w):
-        block_num = h // self.block_size
-        idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, self.block_size, self.block_size)
-        inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
-        inverse_transformed_img = self.img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
-        return inverse_transformed_img
-
-    def calculate_block_mse(self, downsample_in, freq_block):
-        downsample_img = transforms.Resize(size=int(downsample_in.shape[-1]/self.block_size))(downsample_in)
-        assert(downsample_img.shape == freq_block[:,:,0,:,:].shape, "downsample input shape does not match the shape of post-BDCT component")
-        loss_vector = torch.zeros(freq_block.shape[2])
-        for i in range(freq_block.shape[2]):
-            # calculate the MSE between each frequency components and given input downsampled images
-            loss_vector[i] = F.mse_loss(downsample_img, freq_block[:,:,i,:,:])
-        return loss_vector
-
     def forward(self, avgtex, mesh, view, cams=None):
+        # The mesh also needs to be partitioned by two sets of models
         b, n, _ = mesh.shape
         mesh = mesh.view((b, -1))
+        # process input avgtex
+        # avgtex_interpolate = F.interpolate(avgtex, scale_factor=2, mode='bilinear', align_corners=True)
+        # x = avgtex_interpolate
+        x = (avgtex + 1) / 2 * 255
+        if x.shape[1] != 3:
+            print("Wrong input, Channel should equals to 3")
+            return
+        x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
+        x -= 128
+        bs, ch, h, w = x.shape
+        block_num = h // self.block_size
+        x = x.view(bs * ch, 1, h, w)
+        x = F.unfold(x, kernel_size=(self.block_size, self.block_size), dilation=1, padding=0, stride=(self.block_size, self.block_size))
+        x = x.transpose(1, 2)
+        x = x.view(bs, ch, -1, self.block_size, self.block_size)
+        dct_block = dct.block_dct(x) # BDCT
+        dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, self.total_frequency_component).permute(0, 1, 4, 2, 3) # into (bs, ch, 64, block_num, block_num)
+        private_dct_block = dct_block_reorder[:,:,self.private_idx,:,:].view(bs, self.private_total_in_chnl, block_num, block_num)
+        public_dct_block = dct_block_reorder[:,:,self.public_idx,:,:].view(bs, self.public_total_in_chnl, block_num, block_num)
+        # Inserted Horizontal Parationing logic -- Done
 
-        # mean, logstd = self.enc(avgtex, mesh)
-        
-        ## Encoder
-        # divide avgtex into frequency components and then feed it into the texture encoder pipeline
-        bs, ch, h, w = avgtex.shape
-        dct_block_reorder = self.dct_transform(avgtex, bs, ch, h, w)
-        digest_tex = torch.empty(bs, self.texture_fc.in_features).to("cuda:0")
-        block_features = int(self.texture_fc.in_features / self.total_frequency_component)
-        for i in range(self.total_frequency_component):
-            digest_tex[:, i*block_features : (i+1)*block_features] = self.texture_encoder(dct_block_reorder[i,:,:,:,:])
-
-        # def forward(self, tex, mesh):
-        # digest_tex = self.texture_encoder(avgtex)
-        tex_feat = self.relu(self.texture_fc(digest_tex))
-        mesh_feat = self.relu(self.mesh_fc(mesh))
-        feat = torch.cat((tex_feat, mesh_feat), -1)
-        latent = self.fc(feat)
-
-        mean = latent[:, : self.n_latent]
-        logstd = latent[:,  self.n_latent :]
-        # return latent[:, : self.n_latent], latent[:, self.n_latent :]
-        
+        # mean, logstd = self.enc(avgtex, mesh) # Comment out for enabling horizontal partitioning
+        mean, logstd = self.enc(private_dct_block, mesh)
         mean = mean * 0.1
         logstd = logstd * 0.01
         if self.mode == "vae":
@@ -250,50 +205,89 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
         else:
             z = torch.cat((mean, logstd), -1)
             kl = torch.tensor(0).to(z.device)
+        
+        if self.save_latent_code_to_external_device:
+            path_captured_latent_code = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
+            torch.save(logstd, f"{path_captured_latent_code}/logstd_{self.iter}.pth")
+            torch.save(mean, f"{path_captured_latent_code}/mean_{self.iter}.pth")
+            torch.save(z, f"{path_captured_latent_code}/z_{self.iter}.pth")
+            torch.save(kl, f"{path_captured_latent_code}/kl_{self.iter}.pth")
+            self.iter = self.iter + 1
+        
+        pred_tex_private, pred_mesh = self.dec(z, view)
+        pred_tex_private = pred_tex_private.view(bs, ch, -1, block_num, block_num)
+        
+        if self.public_idx != []:
+            mean_outsource, logstd_outsource = self.enc_outsource(public_dct_block)
+            mean_outsource = mean_outsource * 0.1
+            logstd_outsource = logstd_outsource * 0.01
+            if self.mode == "vae":
+                std_outsource = torch.exp(logstd_outsource)
+                eps_outsource = torch.randn_like(mean_outsource)
+                z_outsource = mean_outsource + std_outsource * eps_outsource
+            else:
+                z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
+            
+            # Adding model outsource encoder
+            if self.apply_gaussian_noise:
+                self.variance_matrix_tensor = self.variance_matrix_tensor.cpu()
+                samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.variance_matrix_tensor.detach().numpy(), z_outsource.shape[0]))
+                samples = samples.to("cuda:0")
+                samples = samples.to(z_outsource.dtype)
+                z_outsource = z_outsource + samples
 
-        # pred_tex, pred_mesh = self.dec(z, view)
-        view_code = self.dec_relu(self.dec_view_fc(view))
-        z_code = self.dec_relu(self.dec_z_fc(z))
-        feat = torch.cat((view_code, z_code), 1)
-        texture_code = self.dec_relu(self.dec_texture_fc(feat))
-        dct_block_reorder_dec = torch.empty_like(dct_block_reorder)
-        for i in range(self.total_frequency_component):
-            temp_tex = self.dec_texture_decoder(texture_code[:,i*block_features : (i+1)*block_features])
-            dct_block_reorder_dec[i,:,:,:,:] = temp_tex
-        # pred_tex = self.dec_texture_decoder(texture_code)
-        pred_tex = self.dct_inverse_transform(dct_block_reorder_dec, bs, ch, h, w)
-        pred_mesh = self.dec_mesh_fc(z_code)
-        # return texture, mesh
-    
+            if self.save_latent_code_to_external_device:
+                path_captured_latent_code = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
+                torch.save(logstd_outsource, f"{path_captured_latent_code}/logstd_outsource_{self.iter_outsource}.pth")
+                torch.save(mean_outsource, f"{path_captured_latent_code}/mean_outsource_{self.iter_outsource}.pth")
+                torch.save(z_outsource, f"{path_captured_latent_code}/z_outsource_{self.iter_outsource}.pth")
+                self.iter_outsource = self.iter_outsource + 1
+            
+            pred_tex_outsource = self.dec_outsource(z_outsource, view)
+            pred_tex_outsource = pred_tex_outsource.view(bs, ch, -1, block_num, block_num)
+            # Adding model outsource encoder -- Done
+
+        # Adding block reconstructions
+        pred_tex = torch.zeros(bs, ch, self.total_frequency_component, block_num, block_num).to(pred_tex_private.device)
+
+        for i, idx in enumerate(self.private_idx):
+            pred_tex[:, :, idx, :, :] = pred_tex_private[:, :, i, :, :]
+        for i, idx in enumerate(self.public_idx):
+            pred_tex[:, :, idx, :, :] = pred_tex_outsource[:, :, i, :, :]
+        
+        # Adding block reconstructions -- Done
+        # # reorder to revert the layout
+        idct_dct_block_reorder = pred_tex.view(bs, ch, self.total_frequency_component, block_num*block_num).permute(0, 1, 3, 2).view(bs, ch, block_num*block_num, self.block_size, self.block_size)
+
+        idct_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
+
+        ## Reconstruct the overall original input image
+        pred_tex = self.img_inverse_reroder(idct_dct_block, bs, ch, h, w)
+        pred_tex = transforms.Resize(size=1024)(pred_tex)
         pred_mesh = pred_mesh.view((b, n, 3))
         if cams is not None:
             pred_tex = self.cc(pred_tex, cams)
+
         return pred_tex, pred_mesh, kl
 
     def get_mesh_branch_params(self):
-        p = self.mesh_fc.parameters() + self.dec_mesh_fc.parameters()
+        p = self.enc.get_mesh_branch_params() + self.dec.get_mesh_branch_params()
         return p
 
     def get_tex_branch_params(self):
-        p = self.texture_encoder.parameters() + self.texture_fc.parameters() + self.fc.parameters() + self.dec_texture_decoder.parameters() + self.dec_view_fc.parameters() + self.dec_z_fc.parameters() + self.dec_texture_fc.parameters()
+        p = self.enc.get_tex_branch_params() + self.dec.get_tex_branch_params()
         return p
 
     def get_model_params(self):
         params = []
-        params += list(self.texture_encoder.parameters())
-        params += list(self.texture_fc.parameters())
-        params += list(self.fc.parameters())
-        params += list(self.dec_texture_decoder.parameters())
-        params += list(self.dec_view_fc.parameters())
-        params += list(self.dec_z_fc.parameters())
-        params += list(self.dec_texture_fc.parameters())
-        params += list(self.mesh_fc.parameters())
-        params += list(self.dec_mesh_fc.parameters())
+        params += list(self.enc.parameters())
+        params += list(self.enc_outsource.parameters())
+        params += list(self.dec.parameters())
+        params += list(self.dec_outsource.parameters())
         return params
 
     def get_cc_params(self):
         return self.cc.parameters()
-
 
 
 class WarpFieldDecoder(nn.Module):
@@ -338,14 +332,14 @@ class WarpFieldDecoder(nn.Module):
         return out, grid
 
 
-class DeepAppearanceDecoder(nn.Module):
+class DeepAppearanceDecoderChnlConfig(nn.Module):
     def __init__(
-        self, tex_size, mesh_size, z_dim=128, res=False, non=False, bilinear=False
+        self, tex_size, mesh_size, z_dim=128, n_in_chnl=3, res=False, non=False, bilinear=False
     ):
-        super(DeepAppearanceDecoder, self).__init__()
-        nhidden = z_dim * 4 * 4 if tex_size == 1024 else z_dim * 2 * 2
-        self.texture_decoder = TextureDecoder(
-            tex_size, z_dim, res=res, non=non, bilinear=bilinear
+        super(DeepAppearanceDecoderChnlConfig, self).__init__()
+        nhidden = z_dim * 4 * 4 # if tex_size == 1024 else z_dim * 2 * 2
+        self.texture_decoder = TextureDecoder_Chnl_Config(
+            tex_size, z_dim, n_in_chnl, res=res, non=non, bilinear=bilinear
         )
         self.view_fc = LinearWN(3, 8)
         self.z_fc = LinearWN(z_dim, 256)
@@ -378,12 +372,40 @@ class DeepAppearanceDecoder(nn.Module):
         return p
 
 
-class DeepApperanceEncoder(nn.Module):
-    def __init__(self, inp_size=1024, mesh_inp_size=21918, n_latent=128, res=False):
-        super(DeepApperanceEncoder, self).__init__()
+class DeepApperanceEncoderNoMeshChnlConfig(nn.Module):
+    def __init__(self, inp_size=1024, mesh_inp_size=21918, n_latent=128, n_in_chnl=3, res=False):
+        super(DeepApperanceEncoderNoMeshChnlConfig, self).__init__()
         self.n_latent = n_latent
-        ntexture_feat = 2048 if inp_size == 1024 else 512
-        self.texture_encoder = TextureEncoder(res=res)
+        ntexture_feat = 2048 #if inp_size == 1024 else 512
+        self.texture_encoder = TextureEncoder_Chnl_Config(n_in_chnl=n_in_chnl, res=res)
+        self.texture_fc = LinearWN(ntexture_feat, 256)
+        # self.fc = LinearWN(512, n_latent * 2) # Horizontal Partitioning Modification (Remove Mesh and corresponding input channels from 512 -> 256)
+        self.fc = LinearWN(256, n_latent * 2)
+        self.relu = nn.LeakyReLU(0.2, inplace=True)
+
+        self.apply(lambda x: glorot(x, 0.2))
+        glorot(self.fc, 1.0)
+
+    def forward(self, tex):
+        tex_feat = self.relu(self.texture_fc(self.texture_encoder(tex)))
+        latent = self.fc(tex_feat)
+        return latent[:, : self.n_latent], latent[:, self.n_latent :]
+
+    def get_tex_branch_params(self):
+        p = []
+        p += list(self.texture_encoder.parameters())
+        p += list(self.texture_fc.parameters())
+        p += list(self.fc.parameters())
+        return p
+    
+
+class DeepApperanceEncoderChnlConfig(nn.Module):
+    def __init__(self, inp_size=1024, mesh_inp_size=21918, n_latent=128, n_in_chnl=3, res=False):
+        super(DeepApperanceEncoderChnlConfig, self).__init__()
+        self.n_latent = n_latent
+        # ntexture_feat = 2048 if inp_size == 1024 else 512
+        ntexture_feat = 2048 #if inp_size == 1024 else 128
+        self.texture_encoder = TextureEncoder_Chnl_Config(n_in_chnl=n_in_chnl, res=res)
         self.texture_fc = LinearWN(ntexture_feat, 256)
         self.mesh_fc = LinearWN(mesh_inp_size, 256)
         self.fc = LinearWN(512, n_latent * 2)
@@ -407,6 +429,40 @@ class DeepApperanceEncoder(nn.Module):
         p += list(self.texture_encoder.parameters())
         p += list(self.texture_fc.parameters())
         p += list(self.fc.parameters())
+        return p
+
+
+class DeepAppearanceDecoderNoMeshChnlConfig(nn.Module):
+    def __init__(
+        self, tex_size, mesh_size, z_dim=128, n_in_chnl=3, res=False, non=False, bilinear=False
+    ):
+        super(DeepAppearanceDecoderNoMeshChnlConfig, self).__init__()
+        nhidden = z_dim * 4 * 4 #if tex_size == 1024 else z_dim * 2 * 2
+        self.texture_decoder = TextureDecoder_Chnl_Config(
+            tex_size, z_dim, n_in_chnl=n_in_chnl, res=res, non=non, bilinear=bilinear
+        )
+        self.view_fc = LinearWN(3, 8)
+        self.z_fc = LinearWN(z_dim, 256)
+        self.texture_fc = LinearWN(256 + 8, nhidden)
+        self.relu = nn.LeakyReLU(0.2, inplace=True)
+
+        self.apply(lambda x: glorot(x, 0.2))
+        glorot(self.texture_decoder.upsample[-1].conv2, 1.0)
+
+    def forward(self, z, v):
+        view_code = self.relu(self.view_fc(v))
+        z_code = self.relu(self.z_fc(z))
+        feat = torch.cat((view_code, z_code), 1)
+        texture_code = self.relu(self.texture_fc(feat))
+        texture = self.texture_decoder(texture_code)
+        return texture
+
+    def get_tex_branch_params(self):
+        p = []
+        p += list(self.texture_decoder.parameters())
+        p += list(self.view_fc.parameters())
+        p += list(self.z_fc.parameters())
+        p += list(self.texture_fc.parameters())
         return p
 
 
@@ -463,6 +519,60 @@ class TextureEncoder(nn.Module):
         return out
 
 
+class TextureEncoder_Chnl_Config(nn.Module):
+    def __init__(self, n_in_chnl=3, res=False):
+        super(TextureEncoder_Chnl_Config, self).__init__()
+        self.downsample = nn.Sequential(
+            # ConvDownsample(n_in_chnl, 16, 16, res=res),
+            # ConvDownsampleSglConv(n_in_chnl, 32, 32, res=res),
+            ConvDownsample(n_in_chnl, 32, 32, res=res),
+            ConvDownsample(32, 64, 64, res=res),
+            ConvDownsample(64, 128, 128, res=res),
+        )
+
+    def forward(self, x):
+        b, c, h, w = x.shape
+        feat = self.downsample(x)
+        out = feat.view((b, -1))
+        return out
+
+class TextureDecoder_Chnl_Config(nn.Module):
+    def __init__(self, tex_size, z_dim, n_in_chnl, res=False, non=False, bilinear=False):
+        super(TextureDecoder_Chnl_Config, self).__init__()
+        base = 4# if tex_size == 512 else 4
+        # base = 2 if tex_size == 512 else 4
+        self.z_dim = z_dim
+        if bilinear:
+            print("user bilinear")
+        self.upsample = nn.Sequential(
+            ConvUpsample(
+                z_dim, z_dim, 64, base, res=res, use_bilinear=bilinear, non=non
+            ),
+            ConvUpsample(
+                64, 64, 32, base * (2**2), res=res, use_bilinear=bilinear, non=non
+            ),
+            # ConvUpsample(
+            #     32, 32, 16, base * (2**4), res=res, use_bilinear=bilinear, non=non
+            # ),
+            ConvUpsample(
+                32,
+                32,
+                n_in_chnl,
+                base * (2**4),
+                no_activ=True,
+                res=res,
+                use_bilinear=bilinear,
+                non=non,
+            ),
+        )
+
+    def forward(self, x):
+        b, n = x.shape
+        h = int(np.sqrt(n / self.z_dim))
+        x = x.view((-1, self.z_dim, h, h))
+        out = self.upsample(x)
+        return out
+
 class MLP(nn.Module):
     def __init__(self, nin, nhidden, nout):
         self.fc1 = LinearWN(nin, nhidden)
@@ -475,6 +585,16 @@ class MLP(nn.Module):
         return out
 
 
+class ConvDownsampleSglConv(nn.Module):
+    def __init__(self, cin, chidden, cout, res=False):
+        super(ConvDownsampleSglConv, self).__init__()
+        self.conv1 = Conv2dWN(cin, cout, 4, 2, padding=1)
+        self.relu = nn.LeakyReLU(0.2, inplace=True)
+
+    def forward(self, x):
+        h = self.relu(self.conv1(x))
+        return h
+    
 class ConvDownsample(nn.Module):
     def __init__(self, cin, chidden, cout, res=False):
         super(ConvDownsample, self).__init__()
@@ -496,6 +616,32 @@ class ConvDownsample(nn.Module):
         return h
 
 
+class ConvUpsampleSglConv(nn.Module):
+    def __init__(
+        self,
+        cin,
+        chidden,
+        cout,
+        feature_size,
+        no_activ=False,
+        res=False,
+        use_bilinear=False,
+        non=False,
+    ):
+        super(ConvUpsampleSglConv, self).__init__()
+        self.conv2 = DeconvTexelBias(
+            chidden, cout, feature_size * 2, use_bilinear=use_bilinear, non=non
+        )
+        self.relu = nn.LeakyReLU(0.2, inplace=True)
+        self.no_activ = no_activ
+
+    def forward(self, x):
+        if self.no_activ:
+            h = self.conv2(x)
+        else:
+            h = self.relu(self.conv2(x))
+        return h
+    
 class ConvUpsample(nn.Module):
     def __init__(
         self,

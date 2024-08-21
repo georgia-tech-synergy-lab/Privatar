@@ -85,10 +85,10 @@ def main(args, camera_config, test_segment):
     renderer = Renderer()
 
     # Cannot preload pretrained weights because the Private Path tackles private input images.
-    # if args.model_ckpt is not None:
-    #     print("loading checkpoint from", args.model_ckpt)
-    #     map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
-    #     model.load_state_dict(torch.load(args.model_ckpt, map_location=map_location))
+    if args.model_ckpt is not None:
+        print("loading checkpoint from", args.model_ckpt)
+        map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
+        model.load_state_dict(torch.load(args.model_ckpt, map_location=map_location))
 
     optimizer = optim.Adam(model.module.get_model_params(), args.lr, (0.9, 0.999))
     optimizer_cc = optim.Adam(model.module.get_cc_params(), args.lr, (0.9, 0.999))
@@ -127,7 +127,7 @@ def main(args, camera_config, test_segment):
             },
             project=args.project_name,
             entity=args.author_name,
-            name=args.arch + "_" + "hp_" + str(args.frequency_threshold),
+            name=args.arch + "_" + "hp_merge_pixel" + str(args.frequency_threshold),
             group="group0",
             dir=args.result_path,
             # + "_"
@@ -511,7 +511,7 @@ if __name__ == "__main__":
         "--mesh_inp_size", type=int, default=21918, help="Input mesh dimension"
     )
     parser.add_argument(
-        "--epochs", type=int, default=3, help="Number of training epochs"
+        "--epochs", type=int, default=10, help="Number of training epochs"
     )
     parser.add_argument(
         "--data_dir",

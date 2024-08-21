@@ -2,7 +2,6 @@ import os
 import cv2
 import json 
 import glob
-import tqdm
 import torch
 import numpy as np
 import torch.nn as nn
@@ -49,6 +48,7 @@ else:
         json.dump(camera_config, f)
 
 test_segment = ["EXP_ROM", "EXP_free_face"]
+
 
 ## Generate Data Pair
 dataset_test = Dataset(
@@ -137,10 +137,6 @@ def save_img(data, output, tag=""):
     save_pred_tex_image = (255 * gammaCorrect(save_pred_tex_image / 255.0)).astype(np.uint8)
     Image.fromarray(save_pred_tex_image).save(os.path.join(result_path, "pred_tex_%s.png" % tag))
 
-overall_screen_loss = np.zeros((len(test_loader), 15))
-overall_tex_loss = np.zeros((len(test_loader), 15))
-
-save_frequency_component_to_disk = False
 
 for i, data in enumerate(test_loader):
     for freq_base_id in range(1,16):
@@ -168,14 +164,12 @@ for i, data in enumerate(test_loader):
 
         # Perform frequency decomposition and reconstruction
         bs, ch, h, w = avg_tex.shape
-        # print(f"avg_tex.shape ={avg_tex.shape}")
-        if save_frequency_component_to_disk:
-            transforms.functional.to_pil_image(avg_tex.squeeze(0)).save(f'avg_tex.png')
-        
-        pred_tex = test_img_dct_transform_drop_low_freq_reorder(avg_tex, bs, ch, h, w, freq_base_id)
-        
-        if save_frequency_component_to_disk:
-            transforms.functional.to_pil_image(pred_tex.squeeze(0)).save(f'reconstruct_dct_idct_image_drop_low_freq_{freq_base_id}.png')
+        print(f"avg_tex.shape ={avg_tex.shape}")
+        transforms.functional.to_pil_image(avg_tex.squeeze(0)).save(f'avg_tex.png')
+        # pred_tex = test_img_dct_transform(avg_tex, bs, ch, h, w)#, 1)
+        # pred_tex = test_img_dct_transform_drop_high_freq_reorder(avg_tex, bs, ch, h, w, freq_base_id)
+        pred_tex = test_img_dct_transform(avg_tex, bs, ch, h, w)
+        transforms.functional.to_pil_image(pred_tex.squeeze(0)).save(f'reconstruct_dct_idct_image_drop_high_freq_{freq_base_id}.png')
 
         pred_verts = verts
         tex_loss = mse(pred_tex * mask, gt_tex * mask) * (255**2) / (texstd**2)
@@ -200,13 +194,7 @@ for i, data in enumerate(test_loader):
                 * (255**2)
                 / (texstd**2)
             )
-        # print(f"frequency_component = {freq_base_id}, vert_loss = {tex_loss}, screen_loss = {screen_loss}")
-        # save_img(data, output, f"reconstruct_{freq_base_id}")
-        
-        overall_screen_loss[i, freq_base_id-1] = screen_loss
-        overall_tex_loss[i, freq_base_id-1] = tex_loss
+        print(f"frequency_component = {freq_base_id}, vert_loss = {tex_loss}, screen_loss = {screen_loss}")
+        save_img(data, output, f"reconstruct_{freq_base_id}")
 
-with open('overall_screen_loss.npy', 'wb') as f1:
-    np.save(f1, overall_screen_loss)
-with open('overall_tex_loss.npy', 'wb') as f2:
-    np.save(f2, overall_tex_loss)
+    break

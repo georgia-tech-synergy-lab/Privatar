@@ -119,10 +119,6 @@ def main(args, camera_config, test_segment):
         map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
         model.load_state_dict(torch.load(args.model_ckpt, map_location=map_location))
 
-    if quantization_enable:
-        model.module.dec.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm')
-        model.module.dec = torch.ao.quantization.prepare_qat(model.module.dec)
-
     optimizer = optim.Adam(model.module.get_model_params(), args.lr, (0.9, 0.999))
     optimizer_cc = optim.Adam(model.module.get_cc_params(), args.lr, (0.9, 0.999))
     mse = nn.MSELoss()

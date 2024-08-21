@@ -302,7 +302,7 @@ krt_dir = f"/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/
 # framelist_train = f"/home/jianming/work/Privatar_prj/custom_scripts/bdct_reconstruction/single_expression_frame_list.txt"
 framelist_train = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/selected_expression_frame_list.txt"
 subject_id = data_dir.split("--")[-2]
-camera_config_path = f"camera_configs/camera-split-config_{subject_id}.json"
+camera_config_path = f"{path_prefix}camera_configs/camera-split-config_{subject_id}.json"
 result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
 
 

@@ -29,68 +29,6 @@ from datetime import datetime
 import wandb
 
 wandb_enable = True
-sparsity_enable = False
-
-def weight_kernel_pruning_l1_norm(model, in_bias, prune_ratio):
-    layer_shape = model.state_dict()['weight'].size()
-    weight_copy = model.weight.data.abs().clone()
-    
-    l1_norm = torch.sum(weight_copy, dim=(0, 2, 3))
-    num_channels_to_prune = int(prune_ratio * layer_shape[1])
-    response_val, prune_indices = torch.topk(l1_norm, num_channels_to_prune, largest=False)
-    overall_indices = set([i for i in range(layer_shape[1])])
-    prune_indices = set(prune_indices.tolist())
-    remaining_indices = overall_indices - prune_indices
-
-    new_model = ConvTranspose2dWN(int(layer_shape[0]), int(len(remaining_indices)), kernel_size=(4,4), stride=(2,2), padding=(1,1), bias=False).to(in_bias.device)
-    out_bias = torch.nn.Parameter(in_bias[:,list(remaining_indices),:,:]).to(in_bias.device)
-
-    in_weights_float = torch.zeros((int(layer_shape[0]), len(remaining_indices), int(layer_shape[2]), int(layer_shape[3])), dtype=torch.float)
-    in_weights_float = weight_copy[:, list(remaining_indices), :, :]
-    new_model.weight = torch.nn.Parameter(in_weights_float)
-    print(f"under prune_ratio={prune_ratio}, num_channels_to_prune={num_channels_to_prune}, response_val={response_val}, remaining_indices={remaining_indices}, prune_indices={prune_indices}")
-    return new_model, out_bias, prune_indices
-
-def iAct_channel_pruning_l1_norm(model, prune_indices):
-    layer_shape = model.state_dict()['weight'].size()
-    weight_copy = model.weight.data.abs().clone()
-    
-    prune_indices = set(prune_indices)
-    overall_indices = set([i for i in range(layer_shape[0])])
-    remaining_indices = overall_indices - prune_indices
-
-    new_model = ConvTranspose2dWN(len(remaining_indices), int(layer_shape[1]), kernel_size=(4,4), stride=(2,2), padding=(1,1), bias=False).to(model.weight.device)
-    
-    in_weights_float = torch.zeros((int(len(remaining_indices)), int(layer_shape[1]), int(layer_shape[2]), int(layer_shape[3])), dtype=torch.float)
-    in_weights_float = weight_copy[list(remaining_indices), :, :, :]
-    new_model.weight = torch.nn.Parameter(in_weights_float)
-    print(f"prune input channel indice={prune_indices}, num_channels_to_prune={len(prune_indices)}, remaining_indices={remaining_indices}, prune_indices={prune_indices}")
-    return new_model
-
-def model_decoder_pruning(model, unified_pruning_ratio):
-    model.dec.texture_decoder.upsample[0].conv1.deconv, model.dec.texture_decoder.upsample[0].conv1.bias, prune_indices_1 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[0].conv1.deconv, model.dec.texture_decoder.upsample[0].conv1.bias, unified_pruning_ratio)
-    model.dec.texture_decoder.upsample[0].conv2.deconv = iAct_channel_pruning_l1_norm(model.dec.texture_decoder.upsample[0].conv2.deconv, prune_indices_1)
-
-    model.dec.texture_decoder.upsample[0].conv2.deconv, model.dec.texture_decoder.upsample[0].conv2.bias, prune_indices_2 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[0].conv2.deconv, model.dec.texture_decoder.upsample[0].conv2.bias, unified_pruning_ratio)
-    model.dec.texture_decoder.upsample[1].conv1.deconv = iAct_channel_pruning_l1_norm(model.dec.texture_decoder.upsample[1].conv1.deconv, prune_indices_2)
-
-    model.dec.texture_decoder.upsample[1].conv1.deconv,  model.dec.texture_decoder.upsample[1].conv1.bias, prune_indices_3 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[1].conv1.deconv, model.dec.texture_decoder.upsample[1].conv1.bias, unified_pruning_ratio)
-    model.dec.texture_decoder.upsample[1].conv2.deconv = iAct_channel_pruning_l1_norm(model.dec.texture_decoder.upsample[1].conv2.deconv, prune_indices_3)
-
-    model.dec.texture_decoder.upsample[1].conv2.deconv,  model.dec.texture_decoder.upsample[1].conv2.bias, prune_indices_4 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[1].conv2.deconv, model.dec.texture_decoder.upsample[1].conv2.bias, unified_pruning_ratio)
-    model.dec.texture_decoder.upsample[2].conv1.deconv = iAct_channel_pruning_l1_norm(model.dec.texture_decoder.upsample[2].conv1.deconv, prune_indices_4)
-
-    model.dec.texture_decoder.upsample[2].conv1.deconv,  model.dec.texture_decoder.upsample[2].conv1.bias, prune_indices_5 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[2].conv1.deconv, model.dec.texture_decoder.upsample[2].conv1.bias, unified_pruning_ratio)
-    model.dec.texture_decoder.upsample[2].conv2.deconv = iAct_channel_pruning_l1_norm(model.dec.texture_decoder.upsample[2].conv2.deconv, prune_indices_5)
-
-    model.dec.texture_decoder.upsample[2].conv2.deconv,  model.dec.texture_decoder.upsample[2].conv2.bias, prune_indices_6 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[2].conv2.deconv, model.dec.texture_decoder.upsample[2].conv2.bias, unified_pruning_ratio)
-    model.dec.texture_decoder.upsample[3].conv1.deconv = iAct_channel_pruning_l1_norm(model.dec.texture_decoder.upsample[3].conv1.deconv, prune_indices_6)
-
-    model.dec.texture_decoder.upsample[3].conv1.deconv, model.dec.texture_decoder.upsample[3].conv1.bias, prune_indices_7 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[3].conv1.deconv, model.dec.texture_decoder.upsample[3].conv1.bias, unified_pruning_ratio)
-    model.dec.texture_decoder.upsample[3].conv2.deconv = iAct_channel_pruning_l1_norm(model.dec.texture_decoder.upsample[3].conv2.deconv, prune_indices_7)
-
-    model.dec.texture_decoder.upsample[3].conv2.deconv,  model.dec.texture_decoder.upsample[3].conv2.bias, prune_indices_8 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[3].conv2.deconv, model.dec.texture_decoder.upsample[3].conv2.bias, unified_pruning_ratio)
-    return model
 
 def main(args, camera_config, test_segment):
     local_rank = torch.distributed.get_rank()
@@ -151,9 +89,6 @@ def main(args, camera_config, test_segment):
     #     print("loading checkpoint from", args.model_ckpt)
     #     map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
     #     model.load_state_dict(torch.load(args.model_ckpt, map_location=map_location))
-
-    if sparsity_enable:
-        model = model_decoder_pruning(model, args.unified_pruning_ratio)
 
     optimizer = optim.Adam(model.module.get_model_params(), args.lr, (0.9, 0.999))
     optimizer_cc = optim.Adam(model.module.get_cc_params(), args.lr, (0.9, 0.999))
@@ -242,10 +177,10 @@ def main(args, camera_config, test_segment):
         tex_loss = mse(pred_tex * mask, gt_tex * mask) * (255**2) / (texstd**2)
         if args.lambda_screen > 0:
             screen_mask, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask,  [height_render, width_render]#args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask,  [height_render, width_render] #args.resolution
             )
             pred_screen, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex,  [height_render, width_render]#args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex,  [height_render, width_render] #args.resolution
             )
             screen_loss = (
                 torch.mean((pred_screen - photo_short) ** 2 * screen_mask[:, :, :width_render, :])

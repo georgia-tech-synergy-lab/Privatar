@@ -18,7 +18,6 @@ from torchjpeg import dct
 from PIL import Image
 import torchvision.transforms as transforms
 
-
 # prefix_path_captured_latent_code = prefix_path_captured_latent_code_god2
 threshold_list = [0.1, 0.3, 0.35, 0.4, 0.42, 0.45, 0.5, 0.6, 0.7, 1.1, 1.2, 3.5, 5]
 
@@ -50,8 +49,7 @@ for element in all_possible_idx:
     if element not in private_idx:
         public_idx.append(element)
     
-
-class DeepAppearanceVAE_hp_freq_seq(nn.Module):
+class DeepAppearanceVAEHPLayerRed(nn.Module):
     def __init__(
         self,
         tex_size=1024,
@@ -70,17 +68,21 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
         non=False,
         bilinear=False,
     ):
-        super(DeepAppearanceVAE_hp_freq_seq, self).__init__()
+        super(DeepAppearanceVAEHPLayerRed, self).__init__()
         z_dim = n_latent if mode == "vae" else n_latent * 2
         self.mode = mode
         # self.enc = DeepApperanceEncoder(
         #     tex_size, mesh_inp_size, n_latent=z_dim, res=res
         # )
-
+        
+        self.block_size = n_blocks
+        self.total_frequency_component = self.block_size * self.block_size
+        
         self.n_latent = z_dim
-        ntexture_feat = 2048 if tex_size == 1024 else 512
-        self.texture_encoder = TextureEncoder(res=res)
+        ntexture_feat = 1024*16 if tex_size == 1024 else 512
+        self.texture_encoder = TextureEncoderLayerRed(res=res)
         self.texture_fc = LinearWN(ntexture_feat, 256)
+        # self.tex_latent_code_merge = LinearWN(256*self.total_frequency_component, 256)
         self.mesh_fc = LinearWN(mesh_inp_size, 256) # The Mesh based encoder.
         self.fc = LinearWN(512, z_dim * 2)
         self.relu = nn.LeakyReLU(0.2, inplace=True)
@@ -91,22 +93,20 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
         #     tex_size, mesh_inp_size, z_dim=z_dim, res=res, non=non, bilinear=bilinear
         # )
 
-        nhidden = z_dim * 4 * 4 # if tex_size == 1024 else z_dim * 2 * 2
-        self.dec_texture_decoder = TextureDecoder(
-            tex_size, int(z_dim/2), res=res, non=True, bilinear=bilinear
+        self.dec_texture_decoder = TextureDecoderLayerRed(
+            tex_size, 64*16, res=res, non=True, bilinear=bilinear
         )
         self.dec_view_fc = LinearWN(3, 8)
         self.dec_z_fc = LinearWN(z_dim, 256)
         self.dec_mesh_fc = LinearWN(256, mesh_inp_size)
-        self.dec_texture_fc = LinearWN(256 + 8, nhidden)
+        self.flatten_tex_code_per_freq = 1024*self.total_frequency_component
+        # self.dec_tex_latent_code_merge = LinearWN(256, 256*self.total_frequency_component)
+        self.dec_texture_fc = LinearWN(256 + 8, self.flatten_tex_code_per_freq)
         self.dec_relu = nn.LeakyReLU(0.2, inplace=True)
 
         self.cc = ColorCorrection(n_cams)
 
         # Added Extra Code
-        self.block_size = n_blocks
-        self.total_frequency_component = self.block_size * self.block_size
-        
         self.frequency_threshold = frequency_threshold
         self.private_idx, self.public_idx = self.private_freq_component_thres_based_selection(average_texture_path, frequency_threshold) 
         self.prefix_path_captured_latent_code = prefix_path_captured_latent_code
@@ -115,14 +115,9 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
         self.mean = np.zeros(256)
         if apply_gaussian_noise:
             self.variance_matrix_tensor = torch.load(path_variance_matrix_tensor).cpu()
-        directory_being_created = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
-        print(f"create directory {directory_being_created}")
-        if not os.path.exists(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"):
-            os.makedirs(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code")
-
+       
     def img_reorder(self, x, bs, ch, h, w):
         x = (x + 1) / 2 * 255
-        assert(x.shape[1] == 3, "Wrong input, Channel should equals to 3")
         x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
         x -= 128
         x = x.view(bs * ch, 1, h, w)
@@ -141,10 +136,9 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
         x = dct.to_rgb(x)#.squeeze(0)
         x = (x / 255.0) * 2 - 1
         return x
-
+    
     def img_reorder_pure_bdct(self, x, bs, ch, h, w):
         # x = (x + 1) / 2 * 255
-        assert(x.shape[1] == 3, "Wrong input, Channel should equals to 3")
         # x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
         # x -= 128
         x = x.view(bs * ch, 1, h, w)
@@ -163,7 +157,7 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
         # x = dct.to_rgb(x)#.squeeze(0)
         # x = (x / 255.0) * 2 - 1
         return x
-        
+    
     def private_freq_component_thres_based_selection(self, img_path, mse_threshold):
         # The original input image comes with it and I disable it to reduce the computation overhead.
         image = Image.open(img_path).convert('RGB')
@@ -194,13 +188,17 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
         rerodered_img = self.img_reorder_pure_bdct(x, bs, ch, h, w)
         block_num = h // self.block_size
         dct_block = dct.block_dct(rerodered_img) #BDCT
-        dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, self.total_frequency_component).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
-        # A given frequency reference is "dct_block_reorder[freq_id, :, :, :, :]"
+        # dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, self.total_frequency_component).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
+        # dct_block_reorder = dct_block_reorder.permute(1,0,2,3,4).reshape(-1, ch*self.total_frequency_component, int(h/self.block_size), int(w/self.block_size))
+        dct_block_reorder = dct_block.view(bs, ch, self.total_frequency_component, block_num, block_num).permute(0, 1, 3, 4, 2).reshape(-1, ch*self.total_frequency_component, block_num, block_num)
         return dct_block_reorder
 
-    def dct_inverse_transform(self, dct_block_reorder,bs, ch, h, w):
+    def dct_inverse_transform(self, dct_block_reorder, bs, ch, h, w):
         block_num = h // self.block_size
-        idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, self.block_size, self.block_size)
+        square_block_num=int(block_num*block_num)
+        idct_dct_block_reorder = dct_block_reorder.reshape(bs, ch, self.total_frequency_component, square_block_num).permute(0, 1, 3, 2).view(bs, ch, square_block_num, self.block_size, self.block_size)
+        # dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, self.total_frequency_component).permute(0, 4, 1, 2, 3).reshape(-1, ch*self.total_frequency_component, block_num, block_num)
+        # idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, self.block_size, self.block_size)
         inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
         inverse_transformed_img = self.img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
         return inverse_transformed_img
@@ -218,27 +216,17 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
         b, n, _ = mesh.shape
         mesh = mesh.view((b, -1))
 
-        # mean, logstd = self.enc(avgtex, mesh)
-        
         ## Encoder
         # divide avgtex into frequency components and then feed it into the texture encoder pipeline
         bs, ch, h, w = avgtex.shape
         dct_block_reorder = self.dct_transform(avgtex, bs, ch, h, w)
-        digest_tex = torch.empty(bs, self.texture_fc.in_features).to("cuda:0")
-        block_features = int(self.texture_fc.in_features / self.total_frequency_component)
-        for i in range(self.total_frequency_component):
-            digest_tex[:, i*block_features : (i+1)*block_features] = self.texture_encoder(dct_block_reorder[i,:,:,:,:])
-
-        # def forward(self, tex, mesh):
-        # digest_tex = self.texture_encoder(avgtex)
-        tex_feat = self.relu(self.texture_fc(digest_tex))
+        tex_feat = self.texture_fc(self.texture_encoder(dct_block_reorder))
         mesh_feat = self.relu(self.mesh_fc(mesh))
         feat = torch.cat((tex_feat, mesh_feat), -1)
         latent = self.fc(feat)
 
         mean = latent[:, : self.n_latent]
         logstd = latent[:,  self.n_latent :]
-        # return latent[:, : self.n_latent], latent[:, self.n_latent :]
         
         mean = mean * 0.1
         logstd = logstd * 0.01
@@ -251,19 +239,13 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
             z = torch.cat((mean, logstd), -1)
             kl = torch.tensor(0).to(z.device)
 
-        # pred_tex, pred_mesh = self.dec(z, view)
         view_code = self.dec_relu(self.dec_view_fc(view))
         z_code = self.dec_relu(self.dec_z_fc(z))
         feat = torch.cat((view_code, z_code), 1)
-        texture_code = self.dec_relu(self.dec_texture_fc(feat))
-        dct_block_reorder_dec = torch.empty_like(dct_block_reorder)
-        for i in range(self.total_frequency_component):
-            temp_tex = self.dec_texture_decoder(texture_code[:,i*block_features : (i+1)*block_features])
-            dct_block_reorder_dec[i,:,:,:,:] = temp_tex
-        # pred_tex = self.dec_texture_decoder(texture_code)
+        dec_texture_code_list = self.dec_relu(self.dec_texture_fc(feat))
+        dct_block_reorder_dec = self.dec_texture_decoder(dec_texture_code_list)
         pred_tex = self.dct_inverse_transform(dct_block_reorder_dec, bs, ch, h, w)
         pred_mesh = self.dec_mesh_fc(z_code)
-        # return texture, mesh
     
         pred_mesh = pred_mesh.view((b, n, 3))
         if cams is not None:
@@ -293,8 +275,6 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
 
     def get_cc_params(self):
         return self.cc.parameters()
-
-
 
 class WarpFieldDecoder(nn.Module):
     def __init__(self, tex_size=1024, z_dim=128):
@@ -338,99 +318,27 @@ class WarpFieldDecoder(nn.Module):
         return out, grid
 
 
-class DeepAppearanceDecoder(nn.Module):
-    def __init__(
-        self, tex_size, mesh_size, z_dim=128, res=False, non=False, bilinear=False
-    ):
-        super(DeepAppearanceDecoder, self).__init__()
-        nhidden = z_dim * 4 * 4 if tex_size == 1024 else z_dim * 2 * 2
-        self.texture_decoder = TextureDecoder(
-            tex_size, z_dim, res=res, non=non, bilinear=bilinear
-        )
-        self.view_fc = LinearWN(3, 8)
-        self.z_fc = LinearWN(z_dim, 256)
-        self.mesh_fc = LinearWN(256, mesh_size)
-        self.texture_fc = LinearWN(256 + 8, nhidden)
-        self.relu = nn.LeakyReLU(0.2, inplace=True)
-
-        self.apply(lambda x: glorot(x, 0.2))
-        glorot(self.mesh_fc, 1.0)
-        glorot(self.texture_decoder.upsample[-1].conv2, 1.0)
-
-    def forward(self, z, v):
-        view_code = self.relu(self.view_fc(v))
-        z_code = self.relu(self.z_fc(z))
-        feat = torch.cat((view_code, z_code), 1)
-        texture_code = self.relu(self.texture_fc(feat))
-        texture = self.texture_decoder(texture_code)
-        mesh = self.mesh_fc(z_code)
-        return texture, mesh
-
-    def get_mesh_branch_params(self):
-        return list(self.mesh_fc.parameters())
-
-    def get_tex_branch_params(self):
-        p = []
-        p += list(self.texture_decoder.parameters())
-        p += list(self.view_fc.parameters())
-        p += list(self.z_fc.parameters())
-        p += list(self.texture_fc.parameters())
-        return p
-
-
-class DeepApperanceEncoder(nn.Module):
-    def __init__(self, inp_size=1024, mesh_inp_size=21918, n_latent=128, res=False):
-        super(DeepApperanceEncoder, self).__init__()
-        self.n_latent = n_latent
-        ntexture_feat = 2048 if inp_size == 1024 else 512
-        self.texture_encoder = TextureEncoder(res=res)
-        self.texture_fc = LinearWN(ntexture_feat, 256)
-        self.mesh_fc = LinearWN(mesh_inp_size, 256)
-        self.fc = LinearWN(512, n_latent * 2)
-        self.relu = nn.LeakyReLU(0.2, inplace=True)
-
-        self.apply(lambda x: glorot(x, 0.2))
-        glorot(self.fc, 1.0)
-
-    def forward(self, tex, mesh):
-        tex_feat = self.relu(self.texture_fc(self.texture_encoder(tex)))
-        mesh_feat = self.relu(self.mesh_fc(mesh))
-        feat = torch.cat((tex_feat, mesh_feat), -1)
-        latent = self.fc(feat)
-        return latent[:, : self.n_latent], latent[:, self.n_latent :]
-
-    def get_mesh_branch_params(self):
-        return list(self.mesh_fc.parameters())
-
-    def get_tex_branch_params(self):
-        p = []
-        p += list(self.texture_encoder.parameters())
-        p += list(self.texture_fc.parameters())
-        p += list(self.fc.parameters())
-        return p
-
-
-class TextureDecoder(nn.Module):
+class TextureDecoderLayerRed(nn.Module):
     def __init__(self, tex_size, z_dim, res=False, non=False, bilinear=False):
-        super(TextureDecoder, self).__init__()
+        super(TextureDecoderLayerRed, self).__init__()
         base = 2 if tex_size == 512 else 4
         self.z_dim = z_dim
 
         self.upsample = nn.Sequential(
+            # ConvUpsample(
+            #     z_dim, z_dim, 64, base, res=res, use_bilinear=bilinear, non=non
+            # ),
             ConvUpsample(
-                z_dim, z_dim, 64, base, res=res, use_bilinear=bilinear, non=non
+                64*16, 64*16, 32*16, base, res=res, use_bilinear=bilinear, non=non
             ),
             ConvUpsample(
-                64, 64, 32, base * (2**2), res=res, use_bilinear=bilinear, non=non
+                32*16, 32*16, 16*16, base * (2**2), res=res, use_bilinear=bilinear, non=non
             ),
             ConvUpsample(
-                32, 32, 16, base * (2**4), res=res, use_bilinear=bilinear, non=non
-            ),
-            ConvUpsample(
-                16,
-                16,
-                3,
-                base * (2**6),
+                16*16,
+                16*16,
+                3*16,
+                base * (2**4),
                 no_activ=True,
                 res=res,
                 use_bilinear=bilinear,
@@ -446,14 +354,14 @@ class TextureDecoder(nn.Module):
         return out
 
 
-class TextureEncoder(nn.Module):
+class TextureEncoderLayerRed(nn.Module):
     def __init__(self, res=False):
-        super(TextureEncoder, self).__init__()
+        super(TextureEncoderLayerRed, self).__init__()
         self.downsample = nn.Sequential(
-            ConvDownsample(3, 16, 16, res=res),
-            ConvDownsample(16, 32, 32, res=res),
-            ConvDownsample(32, 64, 64, res=res),
-            ConvDownsample(64, 128, 128, res=res),
+            ConvDownsample(3*16, 16*16, 16*16, res=res),
+            ConvDownsample(16*16, 32*16, 32*16, res=res),
+            ConvDownsample(32*16, 64*16, 64*16, res=res),
+            # ConvDownsample(64, 128, 128, res=res),
         )
 
     def forward(self, x):

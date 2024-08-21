@@ -12,234 +12,23 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# Custom Inserted
-import os
-from torchjpeg import dct
-from PIL import Image
-import torchvision.transforms as transforms
 
-
-# prefix_path_captured_latent_code = prefix_path_captured_latent_code_god2
-threshold_list = [0.1, 0.3, 0.35, 0.4, 0.42, 0.45, 0.5, 0.6, 0.7, 1.1, 1.2, 3.5, 5]
-
-# Select based on the difference of downsample input --- BDCT frequency block.
-all_private_selection = [[0],
-[0, 1],
-[0, 1, 2],
-[0, 1, 2, 3],
-[0, 1, 2, 3, 4],
-[0, 1, 2, 3, 4, 5],
-[0, 1, 2, 3, 4, 5, 6],
-[0, 1, 2, 3, 4, 5, 6, 7],
-[0, 1, 2, 3, 4, 5, 6, 7, 8],
-[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
-[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]]
-
-all_possible_idx = [i for i in range(64)]
-selected_privacy_idx = -2
-
-private_idx = all_private_selection[selected_privacy_idx]
-public_idx = []
-
-for element in all_possible_idx:
-    if element not in private_idx:
-        public_idx.append(element)
-    
-
-class DeepAppearanceVAE_hp_freq_seq(nn.Module):
+class WarpFieldVAE(nn.Module):
     def __init__(
-        self,
-        tex_size=1024,
-        mesh_inp_size=21918,
-        mode="vae",
-        n_latent=128,
-        n_cams=38,
-        n_blocks=4,
-        frequency_threshold=19,
-        average_texture_path="/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png",
-        prefix_path_captured_latent_code="/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_",
-        path_variance_matrix_tensor="/usr/scratch/jianming/Privatar/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_6.0_mutual_bound_1.pth",
-        save_latent_code_to_external_device = False,
-        apply_gaussian_noise = True,
-        res=False,
-        non=False,
-        bilinear=False,
+        self, tex_size=1024, mesh_inp_size=21918, mode="vae", n_cams=38, z_dim=128
     ):
-        super(DeepAppearanceVAE_hp_freq_seq, self).__init__()
-        z_dim = n_latent if mode == "vae" else n_latent * 2
+        super(WarpFieldVAE, self).__init__()
+        z_dim = z_dim if mode == "vae" else z_dim * 2
         self.mode = mode
-        # self.enc = DeepApperanceEncoder(
-        #     tex_size, mesh_inp_size, n_latent=z_dim, res=res
-        # )
-
-        self.n_latent = z_dim
-        ntexture_feat = 2048 if tex_size == 1024 else 512
-        self.texture_encoder = TextureEncoder(res=res)
-        self.texture_fc = LinearWN(ntexture_feat, 256)
-        self.mesh_fc = LinearWN(mesh_inp_size, 256) # The Mesh based encoder.
-        self.fc = LinearWN(512, z_dim * 2)
-        self.relu = nn.LeakyReLU(0.2, inplace=True)
-        self.apply(lambda x: glorot(x, 0.2))
-        glorot(self.fc, 1.0)
-
-        # self.dec = DeepAppearanceDecoder(
-        #     tex_size, mesh_inp_size, z_dim=z_dim, res=res, non=non, bilinear=bilinear
-        # )
-
-        nhidden = z_dim * 4 * 4 # if tex_size == 1024 else z_dim * 2 * 2
-        self.dec_texture_decoder = TextureDecoder(
-            tex_size, int(z_dim/2), res=res, non=True, bilinear=bilinear
-        )
-        self.dec_view_fc = LinearWN(3, 8)
-        self.dec_z_fc = LinearWN(z_dim, 256)
-        self.dec_mesh_fc = LinearWN(256, mesh_inp_size)
-        self.dec_texture_fc = LinearWN(256 + 8, nhidden)
-        self.dec_relu = nn.LeakyReLU(0.2, inplace=True)
-
         self.cc = ColorCorrection(n_cams)
-
-        # Added Extra Code
-        self.block_size = n_blocks
-        self.total_frequency_component = self.block_size * self.block_size
-        
-        self.frequency_threshold = frequency_threshold
-        self.private_idx, self.public_idx = self.private_freq_component_thres_based_selection(average_texture_path, frequency_threshold) 
-        self.prefix_path_captured_latent_code = prefix_path_captured_latent_code
-        self.save_latent_code_to_external_device = save_latent_code_to_external_device
-        self.apply_gaussian_noise = apply_gaussian_noise
-        self.mean = np.zeros(256)
-        if apply_gaussian_noise:
-            self.variance_matrix_tensor = torch.load(path_variance_matrix_tensor).cpu()
-        directory_being_created = f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"
-        print(f"create directory {directory_being_created}")
-        if not os.path.exists(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code"):
-            os.makedirs(f"{self.prefix_path_captured_latent_code}{self.frequency_threshold}_latent_code")
-
-    def img_reorder(self, x, bs, ch, h, w):
-        x = (x + 1) / 2 * 255
-        assert(x.shape[1] == 3, "Wrong input, Channel should equals to 3")
-        x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
-        x -= 128
-        x = x.view(bs * ch, 1, h, w)
-        x = F.unfold(x, kernel_size=(self.block_size, self.block_size), dilation=1, padding=0, stride=(self.block_size, self.block_size))
-        x = x.transpose(1, 2)
-        x = x.view(bs, ch, -1, self.block_size, self.block_size)
-        return x
-
-    ## Image reordering and testing
-    def img_inverse_reroder(self, coverted_img, bs, ch, h, w):
-        x = coverted_img.view(bs* ch, -1, self.total_frequency_component)
-        x = x.transpose(1, 2)
-        x = F.fold(x, output_size=(h, w), kernel_size=(self.block_size, self.block_size), stride=(self.block_size, self.block_size))
-        x += 128
-        x = x.view(bs, ch, h, w)
-        x = dct.to_rgb(x)#.squeeze(0)
-        x = (x / 255.0) * 2 - 1
-        return x
-
-    def img_reorder_pure_bdct(self, x, bs, ch, h, w):
-        # x = (x + 1) / 2 * 255
-        assert(x.shape[1] == 3, "Wrong input, Channel should equals to 3")
-        # x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
-        # x -= 128
-        x = x.view(bs * ch, 1, h, w)
-        x = F.unfold(x, kernel_size=(self.block_size, self.block_size), dilation=1, padding=0, stride=(self.block_size, self.block_size))
-        x = x.transpose(1, 2)
-        x = x.view(bs, ch, -1, self.block_size, self.block_size)
-        return x
-
-    ## Image reordering and testing
-    def img_inverse_reroder_pure_bdct(self, coverted_img, bs, ch, h, w):
-        x = coverted_img.view(bs* ch, -1, self.total_frequency_component)
-        x = x.transpose(1, 2)
-        x = F.fold(x, output_size=(h, w), kernel_size=(self.block_size, self.block_size), stride=(self.block_size, self.block_size))
-        # x += 128
-        x = x.view(bs, ch, h, w)
-        # x = dct.to_rgb(x)#.squeeze(0)
-        # x = (x / 255.0) * 2 - 1
-        return x
-        
-    def private_freq_component_thres_based_selection(self, img_path, mse_threshold):
-        # The original input image comes with it and I disable it to reduce the computation overhead.
-        image = Image.open(img_path).convert('RGB')
-        transform = transforms.Compose([
-            transforms.ToTensor()
-        ])
-        x = transform(image).unsqueeze(0)
-
-        back_input = x
-        bs, ch, h, w = x.shape
-        block_num = h // self.block_size
-        x = self.img_reorder(x, bs, ch, h, w)
-        dct_block = dct.block_dct(x) # BDCT
-        dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, self.total_frequency_component).permute(0, 1, 4, 2, 3) # into (bs, ch, 16, block_num, block_num)
-        loss_vector = self.calculate_block_mse(back_input, dct_block_reorder)
-        # Split all component based on the frequency
-        private_idx = torch.where(loss_vector > mse_threshold)[0]
-        public_idx = []
-        all_possible_idx = [i for i in range(self.total_frequency_component)]
-        for element in all_possible_idx:
-            if element not in private_idx:
-                public_idx.append(element)
-
-        return private_idx,  torch.Tensor(public_idx).to(torch.int64)
-
-    ## Image frequency cosine transform
-    def dct_transform(self, x, bs, ch, h, w):
-        rerodered_img = self.img_reorder_pure_bdct(x, bs, ch, h, w)
-        block_num = h // self.block_size
-        dct_block = dct.block_dct(rerodered_img) #BDCT
-        dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, self.total_frequency_component).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
-        # A given frequency reference is "dct_block_reorder[freq_id, :, :, :, :]"
-        return dct_block_reorder
-
-    def dct_inverse_transform(self, dct_block_reorder,bs, ch, h, w):
-        block_num = h // self.block_size
-        idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, self.block_size, self.block_size)
-        inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
-        inverse_transformed_img = self.img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
-        return inverse_transformed_img
-
-    def calculate_block_mse(self, downsample_in, freq_block):
-        downsample_img = transforms.Resize(size=int(downsample_in.shape[-1]/self.block_size))(downsample_in)
-        assert(downsample_img.shape == freq_block[:,:,0,:,:].shape, "downsample input shape does not match the shape of post-BDCT component")
-        loss_vector = torch.zeros(freq_block.shape[2])
-        for i in range(freq_block.shape[2]):
-            # calculate the MSE between each frequency components and given input downsampled images
-            loss_vector[i] = F.mse_loss(downsample_img, freq_block[:,:,i,:,:])
-        return loss_vector
+        self.enc = DeepApperanceEncoder(tex_size, mesh_inp_size, n_latent=z_dim)
+        self.dec = DeepAppearanceDecoder(tex_size, mesh_inp_size, z_dim=z_dim)
+        self.warp = WarpFieldDecoder(tex_size=tex_size, z_dim=z_dim)
 
     def forward(self, avgtex, mesh, view, cams=None):
         b, n, _ = mesh.shape
         mesh = mesh.view((b, -1))
-
-        # mean, logstd = self.enc(avgtex, mesh)
-        
-        ## Encoder
-        # divide avgtex into frequency components and then feed it into the texture encoder pipeline
-        bs, ch, h, w = avgtex.shape
-        dct_block_reorder = self.dct_transform(avgtex, bs, ch, h, w)
-        digest_tex = torch.empty(bs, self.texture_fc.in_features).to("cuda:0")
-        block_features = int(self.texture_fc.in_features / self.total_frequency_component)
-        for i in range(self.total_frequency_component):
-            digest_tex[:, i*block_features : (i+1)*block_features] = self.texture_encoder(dct_block_reorder[i,:,:,:,:])
-
-        # def forward(self, tex, mesh):
-        # digest_tex = self.texture_encoder(avgtex)
-        tex_feat = self.relu(self.texture_fc(digest_tex))
-        mesh_feat = self.relu(self.mesh_fc(mesh))
-        feat = torch.cat((tex_feat, mesh_feat), -1)
-        latent = self.fc(feat)
-
-        mean = latent[:, : self.n_latent]
-        logstd = latent[:,  self.n_latent :]
-        # return latent[:, : self.n_latent], latent[:, self.n_latent :]
-        
+        mean, logstd = self.enc(avgtex, mesh)
         mean = mean * 0.1
         logstd = logstd * 0.01
         if self.mode == "vae":
@@ -251,49 +40,92 @@ class DeepAppearanceVAE_hp_freq_seq(nn.Module):
             z = torch.cat((mean, logstd), -1)
             kl = torch.tensor(0).to(z.device)
 
-        # pred_tex, pred_mesh = self.dec(z, view)
-        view_code = self.dec_relu(self.dec_view_fc(view))
-        z_code = self.dec_relu(self.dec_z_fc(z))
-        feat = torch.cat((view_code, z_code), 1)
-        texture_code = self.dec_relu(self.dec_texture_fc(feat))
-        dct_block_reorder_dec = torch.empty_like(dct_block_reorder)
-        for i in range(self.total_frequency_component):
-            temp_tex = self.dec_texture_decoder(texture_code[:,i*block_features : (i+1)*block_features])
-            dct_block_reorder_dec[i,:,:,:,:] = temp_tex
-        # pred_tex = self.dec_texture_decoder(texture_code)
-        pred_tex = self.dct_inverse_transform(dct_block_reorder_dec, bs, ch, h, w)
-        pred_mesh = self.dec_mesh_fc(z_code)
-        # return texture, mesh
-    
+        pred_tex, pred_mesh = self.dec(z, view)
+        warped_tex, warp_field = self.warp(z, pred_tex)
+        pred_mesh = pred_mesh.view((b, n, 3))
+        if cams is not None:
+            warped_tex = self.cc(warped_tex, cams)
+        return warped_tex, pred_mesh, pred_tex, warp_field, kl
+
+    def get_mesh_branch_params(self):
+        p = self.enc.get_mesh_branch_params() + self.dec.get_mesh_branch_params()
+        return p
+
+    def get_tex_branch_params(self):
+        p = self.enc.get_tex_branch_params() + self.dec.get_tex_branch_params()
+        return p
+
+    def get_model_params(self):
+        params = []
+        params += list(self.enc.parameters())
+        params += list(self.dec.parameters())
+        params += list(self.warp.parameters())
+        return params
+
+    def get_cc_params(self):
+        return self.cc.parameters()
+
+
+class DeepAppearanceVAE(nn.Module):
+    def __init__(
+        self,
+        tex_size=1024,
+        mesh_inp_size=21918,
+        mode="vae",
+        n_latent=128,
+        n_cams=38,
+        res=False,
+        non=False,
+        bilinear=False,
+    ):
+        super(DeepAppearanceVAE, self).__init__()
+        z_dim = n_latent if mode == "vae" else n_latent * 2
+        self.mode = mode
+        self.enc = DeepApperanceEncoder(
+            tex_size, mesh_inp_size, n_latent=z_dim, res=res
+        )
+        self.dec = DeepAppearanceDecoder(
+            tex_size, mesh_inp_size, z_dim=z_dim, res=res, non=non, bilinear=bilinear
+        )
+        self.cc = ColorCorrection(n_cams)
+
+    def forward(self, avgtex, mesh, view, cams=None):
+        b, n, _ = mesh.shape
+        mesh = mesh.view((b, -1))
+        mean, logstd = self.enc(avgtex, mesh)
+        mean = mean * 0.1
+        logstd = logstd * 0.01
+        if self.mode == "vae":
+            kl = 0.5 * torch.mean(torch.exp(2 * logstd) + mean**2 - 1.0 - 2 * logstd)
+            std = torch.exp(logstd)
+            eps = torch.randn_like(mean)
+            z = mean + std * eps
+        else:
+            z = torch.cat((mean, logstd), -1)
+            kl = torch.tensor(0).to(z.device)
+
+        pred_tex, pred_mesh = self.dec(z, view)
         pred_mesh = pred_mesh.view((b, n, 3))
         if cams is not None:
             pred_tex = self.cc(pred_tex, cams)
         return pred_tex, pred_mesh, kl
 
     def get_mesh_branch_params(self):
-        p = self.mesh_fc.parameters() + self.dec_mesh_fc.parameters()
+        p = self.enc.get_mesh_branch_params() + self.dec.get_mesh_branch_params()
         return p
 
     def get_tex_branch_params(self):
-        p = self.texture_encoder.parameters() + self.texture_fc.parameters() + self.fc.parameters() + self.dec_texture_decoder.parameters() + self.dec_view_fc.parameters() + self.dec_z_fc.parameters() + self.dec_texture_fc.parameters()
+        p = self.enc.get_tex_branch_params() + self.dec.get_tex_branch_params()
         return p
 
     def get_model_params(self):
         params = []
-        params += list(self.texture_encoder.parameters())
-        params += list(self.texture_fc.parameters())
-        params += list(self.fc.parameters())
-        params += list(self.dec_texture_decoder.parameters())
-        params += list(self.dec_view_fc.parameters())
-        params += list(self.dec_z_fc.parameters())
-        params += list(self.dec_texture_fc.parameters())
-        params += list(self.mesh_fc.parameters())
-        params += list(self.dec_mesh_fc.parameters())
+        params += list(self.enc.parameters())
+        params += list(self.dec.parameters())
         return params
 
     def get_cc_params(self):
         return self.cc.parameters()
-
 
 
 class WarpFieldDecoder(nn.Module):

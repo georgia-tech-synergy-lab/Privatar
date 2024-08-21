@@ -340,7 +340,7 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=20, help="Validation batch size"
+        "--val_batch_size", type=int, default=8, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -462,10 +462,10 @@ if __name__ == "__main__":
         "--path_variance_matrix_tensor", type=str, default="/usr/scratch/jianming/Privatar/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_6.0_mutual_bound_1.pth", help="The path to the profiled noise covariance"
     )
     parser.add_argument(
-        "--save_latent_code_to_external_device", type=bool, action='store_true',default=False, help="Control knob to save latent code to external devices"
+        "--save_latent_code_to_external_device", action='store_true',default=False, help="Control knob to save latent code to external devices"
     )
     parser.add_argument(
-        "--apply_gaussian_noise", type=bool, action='store_true',default=False, help="Control knob to enable noisy training"
+        "--apply_gaussian_noise", action='store_true',default=False, help="Control knob to enable noisy training"
     )
 
     parser.add_argument("--model_path", type=str, default=None, help="Model path")

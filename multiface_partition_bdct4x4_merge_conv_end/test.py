@@ -73,7 +73,7 @@ def main(args, camera_config, test_segment):
         #     args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, frequency_threshold=args.frequency_threshold, average_texture_path=args.average_texture_path, prefix_path_captured_latent_code=args.prefix_path_captured_latent_code
         # ).to(device)
         model = DeepAppearanceVAE_Horizontal_Partition(
-            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, frequency_threshold=args.frequency_threshold, average_texture_path=args.average_texture_path, prefix_path_captured_latent_code=args.prefix_path_captured_latent_code, path_variance_matrix_tensor=args.path_variance_matrix_tensor, save_latent_code_to_external_device = args.save_latent_code_to_external_device,  apply_gaussian_noise = args.apply_gaussian_noise
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, frequency_threshold=args.frequency_threshold, average_texture_path=args.average_texture_path, prefix_path_captured_latent_code=args.prefix_path_captured_latent_code, path_variance_matrix_tensor=args.path_variance_matrix_tensor, save_latent_code_to_external_device = args.save_latent_code_to_external_device, apply_gaussian_noise = args.apply_gaussian_noise
         ).to(device)
     else:
         raise NotImplementedError

@@ -10,7 +10,7 @@ if __name__ == "__main__":
         texture_in = data["avg_tex"].to("cpu")
         bs, ch, h, w = texture_in.shape
         block_imgs = dct_transform(texture_in, bs, ch, h, w)
-        freq_comp.append(block_imgs[frequency_id, :, :, :, :].to("cpu"))
+        freq_comp.append(block_imgs[frequency_id, :, :, :, :].to("cuda:0"))
 
     l2_norm_drop_freq_difference_array = torch.zeros(len(freq_comp), len(freq_comp))
     for i, freq_data_pair1 in tqdm(enumerate(freq_comp)):
