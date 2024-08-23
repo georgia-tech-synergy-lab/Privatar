@@ -11,7 +11,7 @@ prefix_path_captured_latent_code = "/tmp/dummy_path"
 average_texture_path = path_prefix + average_texture_path
 
 # On syenrgy3 machine --- the following codes should be executed
-result_path = f"{result_path_prefix}multiface_bdct_pure"
+result_path = f"{result_path_prefix}bdct_nn_decoder_"
 # result_path = f"{result_path_prefix}bdct4x4_hp_merge_pixel_{str(BDCT_thres)}"
 if not os.path.exists(result_path):
     os.makedirs(result_path)
