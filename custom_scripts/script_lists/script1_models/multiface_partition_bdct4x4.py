@@ -217,7 +217,7 @@ class DeepAppearanceVAE_Horizontal_Partition(nn.Module):
         pred_tex_private, pred_mesh = self.dec(z, view)
         pred_tex_private = pred_tex_private.view(bs, ch, -1, block_num, block_num)
         
-        if self.public_idx != []:
+        if len(self.public_idx) > 0:
             mean_outsource, logstd_outsource = self.enc_outsource(public_dct_block)
             mean_outsource = mean_outsource * 0.1
             logstd_outsource = logstd_outsource * 0.01

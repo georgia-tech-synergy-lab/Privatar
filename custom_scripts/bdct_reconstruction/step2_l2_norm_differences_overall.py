@@ -12,4 +12,4 @@ if __name__ == "__main__":
         for j, freq_data_pair2 in enumerate(texture_list):
             l2_norm_drop_freq_difference_array[i,j] = torch.norm(torch.subtract(freq_data_pair1, freq_data_pair2))
     
-    torch.save(l2_norm_drop_freq_difference_array, f"overall_texture_complete_outsource.pth")
+    torch.save(l2_norm_drop_freq_difference_array, f"all_expression_l2_norm_drop_freq_difference_array_overall.pth")

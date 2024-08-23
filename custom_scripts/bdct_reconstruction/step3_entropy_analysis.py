@@ -24,3 +24,4 @@ if run_mode == "all":
         all_expression_l2_norm_drop_freq_difference_array.append(torch.norm(torch.load(f"/home/jianming/work/Privatar_prj/custom_scripts/bdct_reconstruction/all_expression_l2_norm_drop_freq_difference_array_freq_comp_{freq_id}.pth")))
 
     print(all_expression_l2_norm_drop_freq_difference_array)
+    print(torch.norm(torch.load(f"/home/jianming/work/Privatar_prj/custom_scripts/bdct_reconstruction/all_expression_l2_norm_drop_freq_difference_array_overall.pth")))

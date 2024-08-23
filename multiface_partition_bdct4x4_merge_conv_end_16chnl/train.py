@@ -85,10 +85,10 @@ def main(args, camera_config, test_segment):
     renderer = Renderer()
 
     # Cannot preload pretrained weights because the Private Path tackles private input images.
-    # if args.model_ckpt is not None:
-    #     print("loading checkpoint from", args.model_ckpt)
-    #     map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
-    #     model.load_state_dict(torch.load(args.model_ckpt, map_location=map_location))
+    if args.model_ckpt is not None:
+        print("loading checkpoint from", args.model_ckpt)
+        map_location = {"cuda:0": "cuda:0"}
+        model.load_state_dict(torch.load(args.model_ckpt, map_location=map_location))
 
     optimizer = optim.Adam(model.get_model_params(), args.lr, (0.9, 0.999))
     optimizer_cc = optim.Adam(model.get_cc_params(), args.lr, (0.9, 0.999))
@@ -157,7 +157,7 @@ def main(args, camera_config, test_segment):
         height_render, width_render = args.resolution
         width_render = width_render - (width_render % 8)
         photo_short = torch.Tensor(photo)[:, :, :width_render, :]
-
+        # print(f"avg_tex={avg_tex.shape}, verts={verts.shape}, view={view.shape}, cams={cams.shape}")
         if args.arch == "warp":
             pred_tex, pred_verts, unwarped_tex, warp_field, kl = model(
                 avg_tex, verts, view, cams=cams
@@ -482,10 +482,10 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=24, help="Training batch size"
+        "--train_batch_size", type=int, default=20, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=24, help="Validation batch size"
+        "--val_batch_size", type=int, default=20, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",

@@ -84,6 +84,7 @@ dataset_test = Dataset(
 )
 
 n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
+print(n_cams)
 mesh_inp_size = 21918
 
 # for frequency_threshold in BDCT_threshold:
@@ -106,7 +107,7 @@ for frequency_threshold in BDCT_threshold:
 
     if model_arch == "hp_bdct4x4":
         model = overallModel(tex_size, mesh_inp_size, n_latent=nlatent, n_cams=n_cams, frequency_threshold=frequency_threshold, average_texture_path=average_texture_path, prefix_path_captured_latent_code=prefix_path_captured_latent_code, path_variance_matrix_tensor=path_variance_matrix_tensor, save_latent_code_to_external_device = save_latent_code_to_external_device, apply_gaussian_noise = apply_gaussian_noise)
-        
+        print(model)
     """
         Memory Analysis
     """
