@@ -28,8 +28,7 @@ from torch.utils.data import DataLoader, RandomSampler
 from utils_uwing2 import Renderer, gammaCorrect
 import wandb
 
-wandb_enable = True
-
+wandb_enable = False
 
 def remove_module_prefix(state_dict):
     """
@@ -497,10 +496,10 @@ if __name__ == "__main__":
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=24, help="Training batch size"
+        "--train_batch_size", type=int, default=2, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=24, help="Validation batch size"
+        "--val_batch_size", type=int, default=2, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
