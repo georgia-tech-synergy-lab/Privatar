@@ -40,7 +40,6 @@ class DeepAppearanceVAEBDCT(nn.Module):
         self.total_frequency_component = self.block_size * self.block_size
         
 
-
     def img_reorder_pure_bdct(self, x, bs, ch, h, w):
         # x = (x + 1) / 2 * 255
         # x = dct.to_ycbcr(x)  # comvert RGB to YCBCR

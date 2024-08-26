@@ -1,9 +1,9 @@
 import torch
 
-run_mode = "subset" # "all"
+run_mode = "all" # "all"
 total_freq_component = 16
-path_prefix_to_freq_component = "/workspace/uwing2/Privatar/custom_scripts/bdct_reconstruction"  # for uw2
-# path_prefix_to_freq_component = "/home/jianming/work/Privatar_prj/custom_scripts/bdct_reconstruction" # For God 2
+# path_prefix_to_freq_component = "/workspace/uwing2/Privatar/custom_scripts/bdct_reconstruction"  # for uw2
+path_prefix_to_freq_component = "/home/jianming/work/Privatar_prj/custom_scripts/bdct_reconstruction" # For God 2
 # wanna to decide the arrange of channel by the information.
 """
     From a subset of the model
@@ -22,7 +22,7 @@ if run_mode == "subset":
 """
 if run_mode == "all":
     all_expression_l2_norm_drop_freq_difference_array = []
-    for freq_id in range(15):
+    for freq_id in range(total_freq_component):
         all_expression_l2_norm_drop_freq_difference_array.append(torch.norm(torch.load(f"{path_prefix_to_freq_component}/all_expression_l2_norm_drop_freq_difference_array_freq_comp_{freq_id}.pth")))
 
     print(all_expression_l2_norm_drop_freq_difference_array)
