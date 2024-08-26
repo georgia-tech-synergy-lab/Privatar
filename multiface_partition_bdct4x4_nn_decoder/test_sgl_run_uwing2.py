@@ -25,7 +25,7 @@ import torch.optim as optim
 from dataset import Dataset
 from models import DeepAppearanceVAEBDCT
 from torch.utils.data import DataLoader, RandomSampler
-from utils import Renderer, gammaCorrect
+from utils_uwing2 import Renderer, gammaCorrect
 import wandb
 
 wandb_enable = True
@@ -66,7 +66,7 @@ def main(args, camera_config, test_segment):
     n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
     if args.arch == "base":
         model = DeepAppearanceVAEBDCT(
-            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, result_path=args.result_path, save_latent_code=args.save_latent_code
         ).to(device)
     else:
         raise NotImplementedError
@@ -136,6 +136,10 @@ def main(args, camera_config, test_segment):
 
         output = {}
 
+        height_render, width_render = args.resolution
+        width_render = width_render - (width_render % 8)
+        photo_short = torch.Tensor(photo)[:, :, :width_render, :]
+
         if args.arch == "warp":
             pred_tex, pred_verts, unwarped_tex, warp_field, kl = model(
                 avg_tex, verts, view, cams=cams
@@ -155,13 +159,13 @@ def main(args, camera_config, test_segment):
 
         if args.lambda_screen > 0:
             screen_mask, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, [height_render, width_render]#args.resolution
             )
             pred_screen, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, [height_render, width_render]#args.resolution
             )
             screen_loss = (
-                torch.mean((pred_screen - photo) ** 2 * screen_mask)
+                torch.mean((pred_screen - photo_short) ** 2 * screen_mask)
                 * (255**2)
                 / (texstd**2)
             )
@@ -409,7 +413,7 @@ if __name__ == "__main__":
         "--val_num", type=int, default=500, help="Number of iterations for validation"
     )
     parser.add_argument(
-        "--n_worker", type=int, default=8, help="Number of workers loading dataset"
+        "--n_worker", type=int, default=0, help="Number of workers loading dataset"
     )
     parser.add_argument(
         "--pass_thres",
@@ -436,16 +440,10 @@ if __name__ == "__main__":
         help="Jianming Tong",
     )
     parser.add_argument(
-        "--num_freq_comp_outsourced", type=int, default=2, help="number of outsourced component 2,4,6,8,10,12,14"
-    )
-    parser.add_argument(
         "--save_latent_code",
         action='store_true', 
-        default=True, 
+        default=False, 
         help="save latent code to the result folder ./result_path/latent_code"
-    )
-    parser.add_argument(
-        "--apply_gaussian_noise", action='store_true', default=False, help="Control knob to enable noisy training"
     )
 
 

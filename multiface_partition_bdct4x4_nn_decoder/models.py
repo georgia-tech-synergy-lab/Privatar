@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
+import os
 from os import wait
 
 import numpy as np
@@ -24,6 +25,8 @@ class DeepAppearanceVAEBDCT(nn.Module):
         res=False,
         non=False,
         bilinear=False,
+        result_path="",
+        save_latent_code=False
     ):
         super(DeepAppearanceVAEBDCT, self).__init__()
         z_dim = n_latent if mode == "vae" else n_latent * 2
@@ -39,6 +42,12 @@ class DeepAppearanceVAEBDCT(nn.Module):
         self.block_size = n_blocks
         self.total_frequency_component = self.block_size * self.block_size
         
+        self.save_latent_code = save_latent_code
+        self.latent_code_path = f"{result_path}/latent_code"
+        if self.save_latent_code:
+            if not os.path.exists(self.latent_code_path):
+                os.makedirs(self.latent_code_path)
+        self.iter = 0
 
     def img_reorder_pure_bdct(self, x, bs, ch, h, w):
         # x = (x + 1) / 2 * 255
@@ -92,9 +101,14 @@ class DeepAppearanceVAEBDCT(nn.Module):
             std = torch.exp(logstd)
             eps = torch.randn_like(mean)
             z = mean + std * eps
+            if self.save_latent_code:
+                torch.save(z, f"{self.latent_code_path}/z_{self.iter}.pth")
         else:
             z = torch.cat((mean, logstd), -1)
             kl = torch.tensor(0).to(z.device)
+            if self.save_latent_code:
+                torch.save(z_outsource, f"{self.latent_code_path}/z_outsource_{self.iter}.pth")
+                self.iter = self.iter + 1
 
         pred_tex, pred_mesh = self.dec(z, view)
         pred_mesh = pred_mesh.view((b, n, 3))

@@ -13,10 +13,11 @@ import argparse
 import json
 import os
 import time
-import glob
+from collections import OrderedDict
 
 import cv2
 import numpy as np
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -24,23 +25,23 @@ import torch.optim as optim
 from dataset import Dataset
 from models import DeepAppearanceVAEBDCT
 from torch.utils.data import DataLoader, RandomSampler
-from utils import Renderer, gammaCorrect
+from utils_uwing2 import Renderer, gammaCorrect
 import wandb
 
 wandb_enable = True
 
 def main(args, camera_config, test_segment):
-    torch.cuda.set_device(0)
     device = torch.device("cuda", 0)
 
     dataset_train = Dataset(
         args.data_dir,
         args.krt_dir,
-        args.framelist_train,
+        args.framelist_test,
         args.tex_size,
         camset=None if camera_config is None else camera_config["train"],
         exclude_prefix=test_segment,
     )
+
     dataset_test = Dataset(
         args.data_dir,
         args.krt_dir,
@@ -50,15 +51,8 @@ def main(args, camera_config, test_segment):
         valid_prefix=test_segment,
     )
 
-    train_sampler = RandomSampler(dataset_train)
     test_sampler = RandomSampler(dataset_test)
 
-    train_loader = DataLoader(
-        dataset_train,
-        args.train_batch_size,
-        sampler=train_sampler,
-        num_workers=args.n_worker,
-    )
     test_loader = DataLoader(
         dataset_test,
         args.val_batch_size,
@@ -66,40 +60,40 @@ def main(args, camera_config, test_segment):
         num_workers=args.n_worker,
     )
 
-    print("#train samples", len(dataset_train))
     print("#test samples", len(dataset_test))
     writer = SummaryWriter(log_dir=args.result_path)
 
     n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
-    model = DeepAppearanceVAEBDCT(
-        args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, result_path=args.result_path, save_latent_code=args.save_latent_code
-    ).to(device)
+    if args.arch == "base":
+        model = DeepAppearanceVAEBDCT(
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code
+        ).to(device)
+    else:
+        raise NotImplementedError
+
+    # by default load the best_model.pth
+    print("loading model from", args.model_path)
+    state_dict = torch.load(args.model_path, map_location="cuda:0")
+    model.load_state_dict(state_dict)
+    model = model.to(device)
 
     renderer = Renderer()
 
-    if args.model_ckpt is not None:
-        print("loading checkpoint from", args.model_ckpt)
-        map_location = {"cuda:%d" % 0: "cuda:%d" % 0}
-        model.load_state_dict(torch.load(args.model_ckpt, map_location=map_location))
-
-    optimizer = optim.Adam(model.get_model_params(), args.lr, (0.9, 0.999))
-    optimizer_cc = optim.Adam(model.get_cc_params(), args.lr, (0.9, 0.999))
     mse = nn.MSELoss()
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
 
-    texmean = cv2.resize(dataset_train.texmean, (args.tex_size, args.tex_size))
-    texmin = cv2.resize(dataset_train.texmin, (args.tex_size, args.tex_size))
-    texmax = cv2.resize(dataset_train.texmax, (args.tex_size, args.tex_size))
+    texmean = cv2.resize(dataset_test.texmean, (args.tex_size, args.tex_size))
+    texmin = cv2.resize(dataset_test.texmin, (args.tex_size, args.tex_size))
+    texmax = cv2.resize(dataset_test.texmax, (args.tex_size, args.tex_size))
     texmean = torch.tensor(texmean).permute((2, 0, 1))[None, ...].to(device)
     texmin = torch.tensor(texmin).permute((2, 0, 1))[None, ...].to(device)
     texmax = torch.tensor(texmax).permute((2, 0, 1))[None, ...].to(device)
-    texstd = dataset_train.texstd
+    texstd = dataset_test.texstd
     vertmean = (
-        torch.tensor(dataset_train.vertmean, dtype=torch.float32)
+        torch.tensor(dataset_test.vertmean, dtype=torch.float32)
         .view((1, -1, 3))
         .to(device)
     )
-    vertstd = dataset_train.vertstd
+    vertstd = dataset_test.vertstd
     loss_weight_mask = cv2.flip(cv2.imread(args.loss_weight_mask), 0)
     loss_weight_mask = loss_weight_mask / loss_weight_mask.max()
     loss_weight_mask = (
@@ -121,14 +115,10 @@ def main(args, camera_config, test_segment):
             name=args.project_name,
             group="group0",
             dir=args.result_path,
-            # + "_"
-            # + args.arch
-            # + "_"
-            # + date_time.strftime("_%m_%d_%Y"),
-            job_type="training",
+            job_type="testing",
             reinit=True,
         )
-
+        
     def run_net(data):
         M = data["M"].cuda()
         gt_tex = data["tex"].cuda()
@@ -146,6 +136,10 @@ def main(args, camera_config, test_segment):
 
         output = {}
 
+        height_render, width_render = args.resolution
+        width_render = width_render - (width_render % 8)
+        photo_short = torch.Tensor(photo)[:, :, :width_render, :]
+
         if args.arch == "warp":
             pred_tex, pred_verts, unwarped_tex, warp_field, kl = model(
                 avg_tex, verts, view, cams=cams
@@ -161,17 +155,17 @@ def main(args, camera_config, test_segment):
         gt_tex = (gt_tex * texstd + texmean) / 255.0
 
         loss_mask = loss_weight_mask.repeat(batch, 1, 1, 1)
-
         tex_loss = mse(pred_tex * mask, gt_tex * mask) * (255**2) / (texstd**2)
+
         if args.lambda_screen > 0:
             screen_mask, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, [height_render, width_render]#args.resolution
             )
             pred_screen, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, [height_render, width_render]#args.resolution
             )
             screen_loss = (
-                torch.mean((pred_screen - photo) ** 2 * screen_mask)
+                torch.mean((pred_screen - photo_short) ** 2 * screen_mask)
                 * (255**2)
                 / (texstd**2)
             )
@@ -255,188 +249,74 @@ def main(args, camera_config, test_segment):
                 grid_img[-1].detach().permute((1, 2, 0)).cpu().numpy().astype(np.uint8)
             ).save(os.path.join(args.result_path, "warp_grid_%s.png" % tag))
 
-    prev_loss = 1e8
-    prev_vert_loss = 1e8
-    prev_kl = 1e8
-    batch_idx, val_idx = 0, 0
+    val_idx = 0
     best_screen_loss = 1e8
     best_tex_loss = 1e8
     best_vert_loss = 1e8
     model.train()
-    train_screen_losses = []
-    train_tex_losses = []
-    train_vert_losses = []
-    window = 20
 
+    model.eval()
     begin_time = time.time()
-    for epoch in range(args.epochs):
-        for i, data in enumerate(train_loader):
-            losses, output = run_net(data)
-            if batch_idx % args.val_every == 0:
-                torch.save(
-                    model.state_dict(), os.path.join(args.result_path, "model.pth")
-                )
-                print(
-                    "model.pth saved [Epoch {} Batch Index {}]".format(
-                        epoch, batch_idx
-                    )
-                )
 
-            if (
-                (losses["total_loss"].item() > args.pass_thres * prev_loss)
-                or (losses["vert_loss"].item() > args.pass_thres * prev_vert_loss)
-                or (losses["kl"].item() > args.pass_thres * prev_kl)
-            ):
-                print("throw away batch")
-                continue
+    total, vert, tex, screen, kl = [], [], [], [], []
+    for i, data in tqdm(enumerate(test_loader)):
+        losses, output = run_net(data)
+        total.append(losses["total_loss"].item())
+        vert.append(losses["vert_loss"].item())
+        tex.append(losses["denorm_tex_loss"].item()) # denormalized 
+        screen.append(losses["screen_loss"].item())
+        kl.append(losses["kl"].item())
 
-            writer.add_scalar('train/loss_tex',losses['tex_loss'].item(), batch_idx)
-            writer.add_scalar('train/loss_verts', losses['vert_loss'].item(), batch_idx)
-            writer.add_scalar('train/loss_screen', losses['screen_loss'].item(), batch_idx)
-            writer.add_scalar('train/loss_kl', losses['kl'].item(), batch_idx)
+        if wandb_enable:
+            wandb_logger.log(
+                {
+                    "total_loss": losses["total_loss"].item(),
+                    "vert_loss": losses["vert_loss"].item(),
+                    "tex_loss": losses["tex_loss"].item(),
+                    "screen_loss": losses["screen_loss"].item(),
+                    "kl": losses["kl"].item(),
+                }
+            )
 
-            prev_loss = losses["total_loss"].item()
-            prev_vert_loss = losses["vert_loss"].item()
-            prev_kl = losses["kl"].item()
 
-            train_screen_losses.append(losses["screen_loss"].item())
-            train_tex_losses.append(losses["tex_loss"].item())
-            train_vert_losses.append(losses["vert_loss"].item())
-            if len(train_screen_losses) > window:
-                del train_screen_losses[0]
-                del train_tex_losses[0]
-                del train_vert_losses[0]
-            
-            if wandb_enable:
-                wandb_logger.log(
-                    {
-                        "total_loss": losses["total_loss"].item(),
-                        "vert_loss": losses["vert_loss"].item(),
-                        "tex_loss": losses["tex_loss"].item(),
-                        "screen_loss": losses["screen_loss"].item(),
-                        "kl": losses["kl"].item(),
-                    }
-                )
+        save_img(data, output, "val_%s_%s" % (val_idx, i))
 
-            optimizer.zero_grad()
-            optimizer_cc.zero_grad()
-            losses["total_loss"].backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 10)
-            optimizer.step()
-            optimizer_cc.step()
+    tex_loss = np.array(tex).mean()
+    vert_loss = np.array(vert).mean()
+    screen_loss = np.array(screen).mean()
+    kl = np.array(kl).mean()
 
-            if batch_idx % args.log_every == 0:
-                print(
-                    "%d loss %.3f vert %.3f tex %.3f screen %.3f kl %.3f"
-                    % (
-                        batch_idx,
-                        losses["total_loss"].item(),
-                        losses["vert_loss"].item(),
-                        losses["tex_loss"].item(),
-                        losses["screen_loss"].item(),
-                        losses["kl"].item(),
-                    )
-                )
-                save_img(data, output, "train_%d" % batch_idx)
+    writer.add_scalar('val/loss_tex', losses['tex_loss'].item(), val_idx)
+    writer.add_scalar('val/loss_verts', losses['vert_loss'].item(), val_idx)
+    writer.add_scalar('val/loss_screen', losses['screen_loss'].item(), val_idx)
+    writer.add_scalar('val/loss_kl', losses['kl'].item(), val_idx)
 
-            if batch_idx % args.val_every == 0:
-                model.eval()
-                total, vert, tex, screen, kl = [], [], [], [], []
-                for i, data in enumerate(test_loader):
-                    optimizer_cc.zero_grad()
-                    losses, output = run_net(data)
-                    losses["total_loss"].backward()
-                    optimizer_cc.step()
-                    if i == args.val_num:
-                        break
+    if wandb_enable:
+        wandb_logger.log(
+            {
+                "val_total_loss": losses["total_loss"].item(),
+                "val_vert_loss": losses['vert_loss'].item(),
+                "val_tex_loss": losses['tex_loss'].item(),
+                "val_screen_loss": losses['screen_loss'].item(),
+                "val_kl": losses['kl'].item(),
+            }
+        )
 
-                for i, data in enumerate(test_loader):
-                    with torch.no_grad():
-                        losses, output = run_net(data)
-                        total.append(losses["total_loss"].item())
-                        vert.append(losses["vert_loss"].item())
-                        tex.append(losses["tex_loss"].item())
-                        screen.append(losses["screen_loss"].item())
-                        kl.append(losses["kl"].item())
-                    if i == args.val_num:
-                        break
+    print(
+        "val %d vert %.3f tex %.3f screen %.5f kl %.3f"
+        % (val_idx, vert_loss, tex_loss, screen_loss, kl)
+    )
 
-                tex_loss = np.array(tex).mean()
-                vert_loss = np.array(vert).mean()
-                screen_loss = np.array(screen).mean()
-                kl = np.array(kl).mean()
-                writer.add_scalar('val/loss_tex',tex_loss, val_idx)
-                writer.add_scalar('val/loss_verts', vert_loss, val_idx)
-                writer.add_scalar('val/loss_screen', screen_loss, val_idx)
-                writer.add_scalar('val/loss_kl', kl, val_idx)
-                save_img(data, output, "val_%d" % val_idx)
+    best_screen_loss = min(best_screen_loss, screen_loss)
+    best_tex_loss = min(best_tex_loss, tex_loss)
+    best_vert_loss = min(best_vert_loss, vert_loss)
 
-                val_idx += 1
-                print(
-                    "val %d vert %.3f tex %.3f screen %.3f kl %.3f"
-                    % (val_idx, vert_loss, tex_loss, screen_loss, kl)
-                )
-
-                if wandb_enable:
-                    wandb_logger.log(
-                        {
-                            "val_total_loss": losses["total_loss"].item(),
-                            "val_vert_loss": vert_loss,
-                            "val_tex_loss": tex_loss,
-                            "val_screen_loss": screen_loss,
-                            "val_kl": kl,
-                        }
-                    )
-
-                best_screen_loss = min(best_screen_loss, screen_loss)
-                best_tex_loss = min(best_tex_loss, tex_loss)
-                best_vert_loss = min(best_vert_loss, vert_loss)
-                if (args.lambda_screen > 0 and best_screen_loss == screen_loss) or (
-                    args.lambda_screen == 0 and best_tex_loss == tex_loss
-                ):
-                    torch.save(
-                        model.state_dict(),
-                        os.path.join(args.result_path, "best_model.pth"),
-                    )
-                model.train()
-
-            if batch_idx >= args.max_iter:
-                print(
-                    "best screen loss %f, best tex loss %f best vert loss %f"
-                    % (best_screen_loss, best_tex_loss, best_vert_loss)
-                )
-                torch.save(
-                    model.state_dict(), os.path.join(args.result_path, "model.pth")
-                )
-                train_screen_loss = np.mean(np.array(train_screen_losses))
-                train_tex_loss = np.mean(np.array(train_tex_losses))
-                train_vert_loss = np.mean(np.array(train_vert_losses))
-                end_time = time.time()
-                print("Training takes %f seconds" % (end_time - begin_time))
-                return (
-                    best_screen_loss,
-                    best_tex_loss,
-                    best_vert_loss,
-                    screen_loss,
-                    tex_loss,
-                    vert_loss,
-                    train_screen_loss,
-                    train_tex_loss,
-                    train_vert_loss,
-                )
-
-            batch_idx += 1
-        scheduler.step()
+    end_time = time.time()
+    print("Testing takes %f seconds" % (end_time - begin_time))
     print(
         "best screen loss %f, best tex loss %f best vert loss %f"
         % (best_screen_loss, best_tex_loss, best_vert_loss)
     )
-    torch.save(model.state_dict(), os.path.join(args.result_path, "model.pth"))
-    train_screen_loss = np.mean(np.array(train_screen_losses))
-    train_tex_loss = np.mean(np.array(train_tex_losses))
-    train_vert_loss = np.mean(np.array(train_vert_losses))
-    end_time = time.time()
-    print("Training takes %f seconds" % (end_time - begin_time))
     return (
         best_screen_loss,
         best_tex_loss,
@@ -444,22 +324,13 @@ def main(args, camera_config, test_segment):
         screen_loss,
         tex_loss,
         vert_loss,
-        train_screen_loss,
-        train_tex_loss,
-        train_vert_loss,
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument(
-        "--local_rank", type=int, default=0, help="Local rank for distributed run"
-    )
-    parser.add_argument(
-        "--train_batch_size", type=int, default=24, help="Training batch size"
-    )
-    parser.add_argument(
-        "--val_batch_size", type=int, default=24, help="Validation batch size"
+        "--val_batch_size", type=int, default=8, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -485,9 +356,6 @@ if __name__ == "__main__":
         "--mesh_inp_size", type=int, default=21918, help="Input mesh dimension"
     )
     parser.add_argument(
-        "--epochs", type=int, default=50, help="Number of training epochs"
-    )
-    parser.add_argument(
         "--data_dir",
         type=str,
         default="/mnt/captures/zhengningyuan/m--20180226--0000--6674443--GHS",
@@ -506,12 +374,6 @@ if __name__ == "__main__":
         help="Mask for weighted loss of face",
     )
     parser.add_argument(
-        "--framelist_train",
-        type=str,
-        default="/mnt/captures/zhengningyuan/m--20180226--0000--6674443--GHS/frame_list.txt",
-        help="Frame list for training",
-    )
-    parser.add_argument(
         "--framelist_test",
         type=str,
         default="/mnt/captures/zhengningyuan/m--20180226--0000--6674443--GHS/frame_list.txt",
@@ -520,7 +382,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--test_segment_config",
         type=str,
-        default=None,
+        default="/mnt/captures/ecwuu/test_segment.json",
         help="Directory of expression segments for testing (exclude from training)",
     )
     parser.add_argument(
@@ -566,9 +428,6 @@ if __name__ == "__main__":
         help="Directory to output files",
     )
     parser.add_argument(
-        "--model_ckpt", type=str, default=None, help="Model checkpoint path"
-    )
-    parser.add_argument(
         "--project_name",
         type=str,
         default=None,
@@ -581,24 +440,20 @@ if __name__ == "__main__":
         help="Jianming Tong",
     )
     parser.add_argument(
-        "--frequency_threshold", type=float, default=0, help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
+        "--num_freq_comp_outsourced", type=int, default=2, help="number of outsourced component 2,4,6,8,10,12,14"
     )
     parser.add_argument(
-        "--average_texture_path", type=str, default="/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
-    )
-    parser.add_argument(
-        "--prefix_path_captured_latent_code", type=str, default="/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
-    )
-    parser.add_argument(
-        "--path_variance_matrix_tensor", type=str, default="/home/jianming/work/Privatar_prj/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_0_mutual_bound_1.pth", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
-    )
-    parser.add_argument(
-        "--save_latent_code_to_external_device", action='store_true', default=False, help="Control knob to save latent code to external devices"
+        "--save_latent_code",
+        action='store_true', 
+        default=True, 
+        help="save latent code to the result folder ./result_path/latent_code"
     )
     parser.add_argument(
         "--apply_gaussian_noise", action='store_true', default=False, help="Control knob to enable noisy training"
     )
 
+
+    parser.add_argument("--model_path", type=str, default=None, help="Model path")
     experiment_args = parser.parse_args()
     print(experiment_args)
 
@@ -638,7 +493,7 @@ if __name__ == "__main__":
         f.close()
         test_segment = test_segment_config["segment"]
     else:
-        test_segment = ["EXP_ROM", "EXP_free_face"]
+        test_segment = None
 
     (
         best_screen_loss,
@@ -647,11 +502,7 @@ if __name__ == "__main__":
         screen_loss,
         tex_loss,
         vert_loss,
-        train_screen_loss,
-        train_tex_loss,
-        train_vert_loss,
     ) = main(experiment_args, camera_set, test_segment)
-
     print(
         best_screen_loss,
         best_tex_loss,
@@ -659,14 +510,11 @@ if __name__ == "__main__":
         screen_loss,
         tex_loss,
         vert_loss,
-        train_screen_loss,
-        train_tex_loss,
-        train_vert_loss,
     )
     f = open(os.path.join(experiment_args.result_path, "result.txt"), "a")
     f.write("\n")
     f.write(
-        "Best screen loss %f, best tex loss %f,  best vert loss %f, screen loss %f, tex loss %f, vert_loss %f, train screen loss %f, train tex loss %f, train vert loss %f"
+        "Best screen loss %f, best tex loss %f,  best vert loss %f, screen loss %f, tex loss %f, vert_loss %f"
         % (
             best_screen_loss,
             best_tex_loss,
@@ -674,9 +522,6 @@ if __name__ == "__main__":
             screen_loss,
             tex_loss,
             vert_loss,
-            train_screen_loss,
-            train_tex_loss,
-            train_vert_loss,
         )
     )
     f.close()
