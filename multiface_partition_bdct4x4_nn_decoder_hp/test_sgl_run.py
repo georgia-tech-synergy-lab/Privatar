@@ -25,22 +25,13 @@ import torch.optim as optim
 from dataset import Dataset
 from models import DeepAppearanceVAEBDCT
 from torch.utils.data import DataLoader, RandomSampler
-from utils_uwing2 import Renderer, gammaCorrect
+from utils import Renderer, gammaCorrect
 import wandb
 
 wandb_enable = True
 
 def main(args, camera_config, test_segment):
     device = torch.device("cuda", 0)
-
-    dataset_train = Dataset(
-        args.data_dir,
-        args.krt_dir,
-        args.framelist_test,
-        args.tex_size,
-        camset=None if camera_config is None else camera_config["train"],
-        exclude_prefix=test_segment,
-    )
 
     dataset_test = Dataset(
         args.data_dir,
@@ -63,7 +54,7 @@ def main(args, camera_config, test_segment):
     print("#test samples", len(dataset_test))
     writer = SummaryWriter(log_dir=args.result_path)
 
-    n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
+    n_cams = len(set(camera_config["train"]).union(set(dataset_test.cameras)))
     if args.arch == "base":
         model = DeepAppearanceVAEBDCT(
             args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code
@@ -136,10 +127,6 @@ def main(args, camera_config, test_segment):
 
         output = {}
 
-        height_render, width_render = args.resolution
-        width_render = width_render - (width_render % 8)
-        photo_short = torch.Tensor(photo)[:, :, :width_render, :]
-
         if args.arch == "warp":
             pred_tex, pred_verts, unwarped_tex, warp_field, kl = model(
                 avg_tex, verts, view, cams=cams
@@ -159,13 +146,13 @@ def main(args, camera_config, test_segment):
 
         if args.lambda_screen > 0:
             screen_mask, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, [height_render, width_render]#args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, args.resolution
             )
             pred_screen, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, [height_render, width_render]#args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, args.resolution
             )
             screen_loss = (
-                torch.mean((pred_screen - photo_short) ** 2 * screen_mask)
+                torch.mean((pred_screen - photo) ** 2 * screen_mask)
                 * (255**2)
                 / (texstd**2)
             )
