@@ -33,14 +33,14 @@ wandb_enable = True
 def main(args, camera_config, test_segment):
     device = torch.device("cuda", 0)
 
-    dataset_train = Dataset(
-        args.data_dir,
-        args.krt_dir,
-        args.framelist_test,
-        args.tex_size,
-        camset=None if camera_config is None else camera_config["train"],
-        exclude_prefix=test_segment,
-    )
+    # dataset_train = Dataset(
+    #     args.data_dir,
+    #     args.krt_dir,
+    #     args.framelist_test,
+    #     args.tex_size,
+    #     camset=None if camera_config is None else camera_config["train"],
+    #     exclude_prefix=test_segment,
+    # )
 
     dataset_test = Dataset(
         args.data_dir,
@@ -63,7 +63,7 @@ def main(args, camera_config, test_segment):
     print("#test samples", len(dataset_test))
     writer = SummaryWriter(log_dir=args.result_path)
 
-    n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
+    n_cams = len(set(camera_config["train"]).union(set(dataset_test.cameras)))
     if args.arch == "base":
         model = DeepAppearanceVAE(
             args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams
@@ -311,8 +311,8 @@ def main(args, camera_config, test_segment):
                 }
             )
 
-
-        save_img(data, output, "val_%s_%s" % (val_idx, i))
+        if args.save_img:
+            save_img(data, output, "val_%s_%s" % (val_idx, i))
 
     tex_loss = np.array(tex).mean()
     vert_loss = np.array(vert).mean()
@@ -477,6 +477,9 @@ if __name__ == "__main__":
         action='store_true', 
         default=False, 
         help="save latent code to the result folder ./result_path/latent_code"
+    )
+    parser.add_argument(
+        "--save_img", action='store_true', default=False, help="Control knob to enable image save"
     )
 
 
