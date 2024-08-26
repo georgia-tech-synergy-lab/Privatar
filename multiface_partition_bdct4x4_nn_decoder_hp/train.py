@@ -93,7 +93,7 @@ def main(args, camera_config, test_segment):
 
     n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
     model = DeepAppearanceVAEBDCT(
-        args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced
+        args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code
     ).to(device)
 
     renderer = Renderer()

@@ -23,7 +23,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from dataset import Dataset
-from models import DeepAppearanceVAE, WarpFieldVAE
+from models import DeepAppearanceVAEBDCT
 from torch.utils.data import DataLoader, RandomSampler
 from utils import Renderer, gammaCorrect
 import wandb
@@ -65,53 +65,16 @@ def main(args, camera_config, test_segment):
 
     n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
     if args.arch == "base":
-        model = DeepAppearanceVAE(
-            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams
-        ).to(device)
-    elif args.arch == "res":
-        model = DeepAppearanceVAE(
-            args.tex_size,
-            args.mesh_inp_size,
-            n_latent=args.nlatent,
-            res=True,
-            n_cams=n_cams,
-        ).to(device)
-    elif args.arch == "warp":
-        model = WarpFieldVAE(
-            args.tex_size, args.mesh_inp_size, z_dim=args.nlatent, n_cams=n_cams
-        ).to(device)
-    elif args.arch == "non":
-        model = DeepAppearanceVAE(
-            args.tex_size,
-            args.mesh_inp_size,
-            n_latent=args.nlatent,
-            res=False,
-            non=True,
-            n_cams=n_cams,
-        ).to(device)
-    elif args.arch == "bilinear":
-        model = DeepAppearanceVAE(
-            args.tex_size,
-            args.mesh_inp_size,
-            n_latent=args.nlatent,
-            res=False,
-            non=False,
-            bilinear=True,
-            n_cams=n_cams,
+        model = DeepAppearanceVAEBDCT(
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code
         ).to(device)
     else:
         raise NotImplementedError
 
     # by default load the best_model.pth
-    # state_dict = torch.load(model_dir)
     print("loading model from", args.model_path)
     state_dict = torch.load(args.model_path, map_location="cuda:0")
-
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        name = k[7:]  # remove 'module.'
-        new_state_dict[name] = v
-    model.load_state_dict(new_state_dict)
+    model.load_state_dict(state_dict)
     model = model.to(device)
 
     renderer = Renderer()
@@ -473,10 +436,16 @@ if __name__ == "__main__":
         help="Jianming Tong",
     )
     parser.add_argument(
+        "--num_freq_comp_outsourced", type=int, default=2, help="number of outsourced component 2,4,6,8,10,12,14"
+    )
+    parser.add_argument(
         "--save_latent_code",
         action='store_true', 
-        default=False, 
+        default=True, 
         help="save latent code to the result folder ./result_path/latent_code"
+    )
+    parser.add_argument(
+        "--apply_gaussian_noise", action='store_true', default=False, help="Control knob to enable noisy training"
     )
 
 

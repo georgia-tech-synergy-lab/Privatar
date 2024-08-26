@@ -4,9 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import os 
 import math
 from os import wait
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -25,10 +25,13 @@ class DeepAppearanceVAEBDCT(nn.Module):
         n_latent=128,
         n_cams=38,
         n_block=4,
-        num_freq_comp_outsourced=4, # must be multiple of 2
         res=False,
         non=False,
         bilinear=False,
+        ## Added for horizontal partitioning
+        num_freq_comp_outsourced=4, # must be multiple of 2
+        result_path=False,
+        save_latent_code=False
     ):
         super(DeepAppearanceVAEBDCT, self).__init__()
         n_blocks = 4
@@ -52,7 +55,13 @@ class DeepAppearanceVAEBDCT(nn.Module):
         )
 
         self.cc = ColorCorrection(n_cams)
-
+        
+        self.save_latent_code = save_latent_code
+        self.latent_code_path = f"{result_path}/latent_code"
+        if self.save_latent_code:
+            if not os.path.exists(self.latent_code_path):
+                os.makedirs(self.latent_code_path)
+        self.iter = 0
 
     def generate_freq_group_index(self, l2_diff_list, num_freq_comp_outsourced=4):
         min_val = np.min(l2_diff_list)
@@ -150,9 +159,12 @@ class DeepAppearanceVAEBDCT(nn.Module):
             std = torch.exp(logstd)
             eps = torch.randn_like(mean)
             z = mean + std * eps
+            if self.save_latent_code:
+                torch.save(z, f"{self.latent_code_path}/z_{self.iter}.pth")
         else:
             z = torch.cat((mean, logstd), -1)
             kl = torch.tensor(0).to(z.device)
+        
 
         mean_outsource, logstd_outsource = self.enc_outsourced(dct_block_reorder_outsource, mesh)
         mean_outsource = mean_outsource * 0.1
@@ -162,6 +174,9 @@ class DeepAppearanceVAEBDCT(nn.Module):
             std_outsource = torch.exp(logstd_outsource)
             eps_outsource = torch.randn_like(mean_outsource)
             z_outsource = mean_outsource + std_outsource * eps_outsource
+            if self.save_latent_code:
+                torch.save(z_outsource, f"{self.latent_code_path}/z_outsource_{self.iter}.pth")
+                self.iter = self.iter + 1
         else:
             z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
             kl_outsource = torch.tensor(0).to(z.device)
@@ -172,6 +187,7 @@ class DeepAppearanceVAEBDCT(nn.Module):
         pred_mesh = pred_mesh.view((b, n, 3))
         if cams is not None:
             pred_tex = self.cc(pred_tex, cams)
+
         return pred_tex, pred_mesh, kl_merge
 
     def get_mesh_branch_params(self):

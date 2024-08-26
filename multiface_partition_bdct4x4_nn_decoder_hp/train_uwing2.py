@@ -96,7 +96,7 @@ def main(args, camera_config, test_segment):
 
     n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
     model = DeepAppearanceVAEBDCT(
-        args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced
+        args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code
     ).to(device)
     
     renderer = Renderer()
@@ -622,25 +622,16 @@ if __name__ == "__main__":
         help="Jianming Tong",
     )
     parser.add_argument(
-        "--frequency_threshold", type=float, default=0, help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
+        "--num_freq_comp_outsourced", type=int, default=2, help="number of outsourced component 2,4,6,8,10,12,14"
     )
     parser.add_argument(
-        "--average_texture_path", type=str, default="/home/jianming/work/multiface/dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
-    )
-    parser.add_argument(
-        "--prefix_path_captured_latent_code", type=str, default="/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
-    )
-    parser.add_argument(
-        "--path_variance_matrix_tensor", type=str, default="/home/jianming/work/Privatar_prj/profiled_latent_code/statistics/noise_variance_matrix_horizontal_partition_0_mutual_bound_1.pth", help="the MSE threshold to split overall input into private branch and public branch. Available values: [0.4, 0.8, 1, 1.6, 2.4, 3, 4, 5, 6, 19, 28]"
-    )
-    parser.add_argument(
-        "--save_latent_code_to_external_device", action='store_true', default=False, help="Control knob to save latent code to external devices"
+        "--save_latent_code",
+        action='store_true', 
+        default=True, 
+        help="save latent code to the result folder ./result_path/latent_code"
     )
     parser.add_argument(
         "--apply_gaussian_noise", action='store_true', default=False, help="Control knob to enable noisy training"
-    )
-    parser.add_argument(
-        "--num_freq_comp_outsourced", type=int, default=2, help="number of outsourced component 2,4,6,8,10,12,14"
     )
 
     experiment_args = parser.parse_args()
