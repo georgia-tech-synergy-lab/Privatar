@@ -18,6 +18,8 @@ from collections import OrderedDict
 import cv2
 import numpy as np
 from tqdm import tqdm
+from torchjpeg import dct
+import wandb
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -26,21 +28,45 @@ from dataset import Dataset
 from models import DeepAppearanceVAEBDCT
 from torch.utils.data import DataLoader, RandomSampler
 from utils_uwing2 import Renderer, gammaCorrect
-import wandb
 
 wandb_enable = True
 
-def main(args, camera_config, test_segment):
-    device = torch.device("cuda", 0)
+block_size = 4
+total_frequency_component = int(block_size*block_size)
 
-    # dataset_train = Dataset(
-    #     args.data_dir,
-    #     args.krt_dir,
-    #     args.framelist_test,
-    #     args.tex_size,
-    #     camset=None if camera_config is None else camera_config["train"],
-    #     exclude_prefix=test_segment,
-    # )
+# def img_reorder_pure_bdct(x, bs, ch, h, w):
+#     x = x.view(bs * ch, 1, h, w)
+#     x = F.unfold(x, kernel_size=(block_size, block_size), dilation=1, padding=0, stride=(block_size, block_size))
+#     x = x.transpose(1, 2)
+#     x = x.view(bs, ch, -1, block_size, block_size)
+#     return x
+
+# ## Image reordering and testing
+# def img_inverse_reroder_pure_bdct(self, coverted_img, bs, ch, h, w):
+#     x = coverted_img.view(bs* ch, -1, total_frequency_component)
+#     x = x.transpose(1, 2)
+#     x = F.fold(x, output_size=(h, w), kernel_size=(block_size, block_size), stride=(block_size, block_size))
+#     x = x.view(bs, ch, h, w)
+#     return x
+
+# def dct_transform(x, bs, ch, h, w):
+#     rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
+#     block_num = h // block_size
+#     dct_block = dct.block_dct(rerodered_img) #BDCT
+#     # dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
+#     dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3)
+#     return dct_block_reorder
+
+# def dct_inverse_transform(dct_block_reorder,bs, ch, h, w):
+#     block_num = h // block_size
+#     idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
+#     inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
+#     inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
+    # return inverse_transformed_img
+
+def main(args, camera_config, test_segment):
+    device = torch.device("cpu")
+    # device = torch.device("cuda", 0)
 
     dataset_test = Dataset(
         args.data_dir,
@@ -118,7 +144,7 @@ def main(args, camera_config, test_segment):
             job_type="testing",
             reinit=True,
         )
-        
+    
     def run_net(data):
         M = data["M"].cuda()
         gt_tex = data["tex"].cuda()
@@ -140,14 +166,61 @@ def main(args, camera_config, test_segment):
         width_render = width_render - (width_render % 8)
         photo_short = torch.Tensor(photo)[:, :, :width_render, :]
 
-        if args.arch == "warp":
-            pred_tex, pred_verts, unwarped_tex, warp_field, kl = model(
-                avg_tex, verts, view, cams=cams
-            )
-            output["unwarped_tex"] = unwarped_tex
-            output["warp_field"] = warp_field
+        # pred_tex, pred_verts, kl = model(avg_tex, verts, view, cams=cams)
+                # Only run the outsourced version with noise
+        # pred_tex, pred_verts, kl = model(avg_tex, verts, view, cams=cams) # break it down into steps and apply noises accordingly
+        mesh = verts
+        avgtex = avg_tex
+
+        b, n, _ = mesh.shape
+        mesh = mesh.view((b, -1))
+
+        bs, ch, h, w = avgtex.shape
+        dct_block_reorder = model.dct_transform(avgtex, bs, ch, h, w)
+        
+        dct_block_reorder_local = dct_block_reorder[:,model.local_freq_list,:,:,:]
+        dct_block_reorder_outsource = dct_block_reorder[:,model.outsourced_freq_list,:,:,:]
+
+        block_num = h // block_size
+        dct_block_reorder_local = dct_block_reorder_local.reshape(bs, ch*len(model.local_freq_list), block_num, block_num) # into (bs, ch, block_num, block_num, 16)
+        dct_block_reorder_outsource = dct_block_reorder_outsource.reshape(bs, ch*len(model.outsourced_freq_list), block_num, block_num) # into (bs, ch, block_num, block_num, 16)
+        # print(f"dct_block_reorder_local.shape={dct_block_reorder_local.shape}")
+        # print(f"dct_block_reorder_outsource.shape={dct_block_reorder_outsource.shape}")
+        mean, logstd = model.enc(dct_block_reorder_local, mesh)
+        mean = mean * 0.1
+        logstd = logstd * 0.01
+        if model.mode == "vae":
+            kl = 0.5 * torch.mean(torch.exp(2 * logstd) + mean**2 - 1.0 - 2 * logstd)
+            std = torch.exp(logstd)
+            eps = torch.randn_like(mean)
+            z = mean + std * eps
         else:
-            pred_tex, pred_verts, kl = model(avg_tex, verts, view, cams=cams)
+            z = torch.cat((mean, logstd), -1)
+            kl = torch.tensor(0).to(z.device)
+        
+
+        mean_outsource, logstd_outsource = model.enc_outsourced(dct_block_reorder_outsource, mesh)
+        mean_outsource = mean_outsource * 0.1
+        logstd_outsource = logstd_outsource * 0.01
+        if model.mode == "vae":
+            kl_outsource = 0.5 * torch.mean(torch.exp(2 * logstd_outsource) + mean_outsource**2 - 1.0 - 2 * logstd_outsource)
+            std_outsource = torch.exp(logstd_outsource)
+            eps_outsource = torch.randn_like(mean_outsource)
+            z_outsource = mean_outsource + std_outsource * eps_outsource
+        else:
+            z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
+            kl_outsource = torch.tensor(0).to(z.device)
+
+        ## Add noise to z_outsource [ToDo]
+
+        ## Add noise to z_outsource -- Done
+        
+        pred_tex, pred_mesh = model.dec(z, z_outsource, view)
+        pred_mesh = pred_mesh.view((b, n, 3))
+        if cams is not None:
+            pred_tex = model.cc(pred_tex, cams)
+        # Only run the outsourced version with noise
+
         vert_loss = mse(pred_verts, verts)
 
         pred_verts = pred_verts * vertstd + vertmean
@@ -232,31 +305,12 @@ def main(args, camera_config, test_segment):
                 save_pred_tex_image[_batch_id] = (255 * gammaCorrect(save_pred_tex_image[_batch_id] / 255.0)).astype(np.uint8)
                 Image.fromarray(save_pred_tex_image[_batch_id]).save(os.path.join(args.result_path, f"pred_tex_{tag}_{_batch_id}.png"))
 
-        if args.arch == "warp":
-            warp = output["warp_field"]
-            grid_img = (
-                torch.tensor(
-                    np.array(
-                        Image.open("grid.PNG").resize((args.tex_size, args.tex_size)),
-                        dtype=np.float32,
-                    )[None, ...]
-                )
-                .permute(0, 3, 1, 2)
-                .to(warp.device)
-            )
-            grid_img = F.grid_sample(grid_img, warp[-1:])
-            Image.fromarray(
-                grid_img[-1].detach().permute((1, 2, 0)).cpu().numpy().astype(np.uint8)
-            ).save(os.path.join(args.result_path, "warp_grid_%s.png" % tag))
-
     val_idx = 0
-    best_screen_loss = 1e8
-    best_tex_loss = 1e8
-    best_vert_loss = 1e8
     model.train()
 
     model.eval()
     begin_time = time.time()
+
 
     total, vert, tex, screen, kl = [], [], [], [], []
     for i, data in tqdm(enumerate(test_loader)):
@@ -279,28 +333,26 @@ def main(args, camera_config, test_segment):
             )
 
 
-        if args.save_img:
-            save_img(data, output, "val_%s_%s" % (val_idx, i))
+        save_img(data, output, "val_%s_%s" % (val_idx, i))
 
-    total_loss = np.array(total).mean()
     tex_loss = np.array(tex).mean()
     vert_loss = np.array(vert).mean()
     screen_loss = np.array(screen).mean()
     kl = np.array(kl).mean()
 
-    writer.add_scalar('val/loss_tex', tex_loss, val_idx)
-    writer.add_scalar('val/loss_verts', vert_loss, val_idx)
-    writer.add_scalar('val/loss_screen', screen_loss, val_idx)
-    writer.add_scalar('val/loss_kl', kl, val_idx)
+    writer.add_scalar('val/loss_tex', losses['tex_loss'].item(), val_idx)
+    writer.add_scalar('val/loss_verts', losses['vert_loss'].item(), val_idx)
+    writer.add_scalar('val/loss_screen', losses['screen_loss'].item(), val_idx)
+    writer.add_scalar('val/loss_kl', losses['kl'].item(), val_idx)
 
     if wandb_enable:
         wandb_logger.log(
             {
-                "val_total_loss": total_loss,
-                "val_vert_loss": vert_loss,
-                "val_tex_loss": tex_loss,
-                "val_screen_loss": screen_loss,
-                "val_kl": kl,
+                "val_total_loss": losses["total_loss"].item(),
+                "val_vert_loss": losses['vert_loss'].item(),
+                "val_tex_loss": losses['tex_loss'].item(),
+                "val_screen_loss": losses['screen_loss'].item(),
+                "val_kl": losses['kl'].item(),
             }
         )
 
@@ -327,7 +379,6 @@ def main(args, camera_config, test_segment):
         tex_loss,
         vert_loss,
     )
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
@@ -452,9 +503,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--apply_gaussian_noise", action='store_true', default=False, help="Control knob to enable noisy training"
-    )
-    parser.add_argument(
-        "--save_img", action='store_true', default=False, help="Control knob to enable image save"
     )
 
 

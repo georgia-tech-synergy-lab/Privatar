@@ -281,31 +281,28 @@ def main(args, camera_config, test_segment):
         if args.save_img:
             save_img(data, output, "val_%s_%s" % (val_idx, i))
 
+    total_loss = np.array(total).mean()
     tex_loss = np.array(tex).mean()
     vert_loss = np.array(vert).mean()
     screen_loss = np.array(screen).mean()
     kl = np.array(kl).mean()
 
-    writer.add_scalar('val/loss_tex', losses['tex_loss'].item(), val_idx)
-    writer.add_scalar('val/loss_verts', losses['vert_loss'].item(), val_idx)
-    writer.add_scalar('val/loss_screen', losses['screen_loss'].item(), val_idx)
-    writer.add_scalar('val/loss_kl', losses['kl'].item(), val_idx)
+    writer.add_scalar('val/loss_tex', tex_loss, val_idx)
+    writer.add_scalar('val/loss_verts', vert_loss, val_idx)
+    writer.add_scalar('val/loss_screen', screen_loss, val_idx)
+    writer.add_scalar('val/loss_kl', kl, val_idx)
 
     if wandb_enable:
         wandb_logger.log(
             {
-                "val_total_loss": losses["total_loss"].item(),
-                "val_vert_loss": losses['vert_loss'].item(),
-                "val_tex_loss": losses['tex_loss'].item(),
-                "val_screen_loss": losses['screen_loss'].item(),
-                "val_kl": losses['kl'].item(),
+                "val_total_loss": total_loss,
+                "val_vert_loss": vert_loss,
+                "val_tex_loss": tex_loss,
+                "val_screen_loss": screen_loss,
+                "val_kl": kl,
             }
         )
 
-    print(
-        "val %d vert %.3f tex %.3f screen %.5f kl %.3f"
-        % (val_idx, vert_loss, tex_loss, screen_loss, kl)
-    )
 
     best_screen_loss = min(best_screen_loss, screen_loss)
     best_tex_loss = min(best_tex_loss, tex_loss)
