@@ -8,7 +8,6 @@ average_texture_path = "dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_102
 
 #######
 path_prefix = path_prefix_ice
-model_ckpt = "/storage/ice1/3/0/jtong45/Privatar/training_results/bdct_hp_nn_decoder_8_secondrun/best_model.pth"
 #######
 
 average_texture_path = path_prefix + average_texture_path
@@ -18,8 +17,9 @@ average_texture_path = path_prefix + average_texture_path
 #  --master_port=25678
 train_batch_size = 30
 val_batch_size = 30
-num_freq_comp_outsourced = 8
+num_freq_comp_outsourced = 6
 
+model_ckpt = f"/storage/ice1/3/0/jtong45/Privatar/training_results/bdct_hp_nn_decoder_{num_freq_comp_outsourced}_secondrun/best_model.pth"
 result_path = f"/storage/ice1/3/0/jtong45/Privatar/training_results/bdct_hp_nn_decoder_{num_freq_comp_outsourced}"
 if not os.path.exists(result_path):
     os.makedirs(result_path)
