@@ -198,7 +198,7 @@ def main(args, camera_config, test_segment):
                     Image.fromarray(save_pred_image[_batch_id]).save(
                         os.path.join(args.result_path, f"pred_{tag}_{_batch_id}.png")
                     )
-
+     
         save_gt_image = gt_screen.detach().cpu().numpy().astype(np.uint8)
         if len(save_gt_image.shape) == 4:
             for _batch_id in range(save_gt_image.shape[0]):
@@ -212,6 +212,7 @@ def main(args, camera_config, test_segment):
                 save_gt_tex_image[_batch_id] = (255 * gammaCorrect(save_gt_tex_image[_batch_id] / 255.0)).astype(np.uint8)
                 Image.fromarray(save_gt_tex_image[_batch_id]).save(os.path.join(args.result_path, f"gt_tex_{tag}_{_batch_id}.png"))
             
+        
         save_pred_tex_image = pred_tex.detach().permute((0,2,3,1)).cpu().numpy().astype(np.uint8)
         if len(save_pred_tex_image.shape) == 4:
             for _batch_id in range(save_pred_tex_image.shape[0]):

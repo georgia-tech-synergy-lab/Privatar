@@ -4,7 +4,7 @@ import os
 data_dir = "/workspace/uwing2/multiface"
 result_path_prefix = "/workspace/uwing2/Privatar/testing_results/"
 
-val_batch_size = 22
+val_batch_size = 24
 num_freq_comp_outsourced = 2
 project_name = f"test_test_bdct4x4_hp_nn_decode_{num_freq_comp_outsourced}"
 best_model_path = f"/workspace/uwing2/Privatar/training_results/bdct_hp_nn_decoder_{num_freq_comp_outsourced}/best_model.pth"

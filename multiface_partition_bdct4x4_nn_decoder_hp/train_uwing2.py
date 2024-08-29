@@ -104,18 +104,18 @@ def main(args, camera_config, test_segment):
     if args.model_ckpt is not None:
         print("loading checkpoint from", args.model_ckpt)
         #### Verion 1
-        # cleaned_state_dict = remove_module_prefix(torch.load(args.model_ckpt))
+        cleaned_state_dict = remove_module_prefix(torch.load(args.model_ckpt))
         
-        # model_state_dict = model.state_dict()
-        # for layer_name in model_state_dict:
-        #     if layer_name in cleaned_state_dict and "texture_encoder" not in layer_name and "texture_decoder" not in layer_name:
-        #         model_state_dict[layer_name] = cleaned_state_dict[layer_name]
-        #         print(f"load {layer_name}")
-        # map_location = {"cuda:%d" % 0: "cuda:%d" % 0}
-        # model.load_state_dict(model_state_dict)
+        model_state_dict = model.state_dict()
+        for layer_name in model_state_dict:
+            if layer_name in cleaned_state_dict and "texture_encoder" not in layer_name and "texture_decoder" not in layer_name:
+                model_state_dict[layer_name] = cleaned_state_dict[layer_name]
+                print(f"load {layer_name}")
+        map_location = {"cuda:%d" % 0: "cuda:%d" % 0}
+        model.load_state_dict(model_state_dict)
         
         #### Verion 2
-        model.load_state_dict(torch.load(args.model_ckpt, map_location="cuda:0"))
+        # model.load_state_dict(torch.load(args.model_ckpt, map_location="cuda:0"))
 
     optimizer = optim.Adam(model.get_model_params(), args.lr, (0.9, 0.999))
     optimizer_cc = optim.Adam(model.get_cc_params(), args.lr, (0.9, 0.999))
@@ -142,7 +142,6 @@ def main(args, camera_config, test_segment):
     )
 
     os.makedirs(args.result_path, exist_ok=True)
-
 
     if wandb_enable:
         wandb_logger = wandb.init(
