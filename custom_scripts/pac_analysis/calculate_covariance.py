@@ -8,7 +8,7 @@ import os
 number_files = 5566
 batch_size = 8
 
-outsource_freq_list = [10, 12]
+outsource_freq_list = [14]
 # original model -- 5566 (8)
 ### --- The first one is 2*256, but all things following it is 8*256
 
@@ -24,11 +24,28 @@ outsource_freq_list = [10, 12]
 is_calcualted = False
 if is_calcualted == False:
     for threshold in outsource_freq_list:
-        captured_data_list = f"/storage/ice1/3/0/jtong45/Privatar/testing_results/test_bdct4x4_hp_nn_decode_{threshold}/latent_code"
+        captured_data_list = f"/home/jianming/work/Privatar_prj/testing_results/test_test_bdct4x4_hp_nn_decode_{threshold}/latent_code"
+        # captured_data_list = f"/storage/ice1/3/0/jtong45/Privatar/testing_results/test_bdct4x4_hp_nn_decode_{threshold}/latent_code"
+        captured_z_data = np.zeros(((number_files-1)*batch_size, 256))
         captured_z_outsource_data = np.zeros(((number_files-1)*batch_size, 256))
 
         for i in tqdm(range(number_files-1)):
-            z_outsource_file_list = f"{captured_data_list}/z_{i+1}.pth"
+            z_file_list = f"{captured_data_list}/z_{i+1}.pth"
+            captured_z = torch.load(z_file_list).to("cpu")
+
+            captured_z_data[i*batch_size:(i+1)*batch_size] = captured_z.detach().numpy()
+
+        covariance_matrix_z = np.cov(captured_z_data, rowvar=False)
+
+        # Print the covariance matrix
+        print("Covariance Matrix outsourced:")
+        print(covariance_matrix_z)
+        np.save(f"covariance_matrix_{threshold}_z.npy", covariance_matrix_z)
+
+        print(np.linalg.det(covariance_matrix_z))
+
+        for i in tqdm(range(number_files-1)):
+            z_outsource_file_list = f"{captured_data_list}/z_outsource_{i+1}.pth"
             captured_z_outsource = torch.load(z_outsource_file_list).to("cpu")
 
             captured_z_outsource_data[i*batch_size:(i+1)*batch_size] = captured_z_outsource.detach().numpy()
