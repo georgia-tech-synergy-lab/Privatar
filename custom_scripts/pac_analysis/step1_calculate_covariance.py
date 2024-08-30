@@ -24,12 +24,12 @@ outsource_freq_list = [14]
 is_calcualted = False
 if is_calcualted == False:
     for threshold in outsource_freq_list:
-        captured_data_list = f"/home/jianming/work/Privatar_prj/testing_results/test_test_bdct4x4_hp_nn_decode_{threshold}/latent_code"
+        captured_data_list = f"/home/jianming/work/Privatar_prj/testing_results/test_bdct4x4_hp_nn_decode_{threshold}/latent_code"
         # captured_data_list = f"/storage/ice1/3/0/jtong45/Privatar/testing_results/test_bdct4x4_hp_nn_decode_{threshold}/latent_code"
-        captured_z_data = np.zeros(((number_files-1)*batch_size, 256))
-        captured_z_outsource_data = np.zeros(((number_files-1)*batch_size, 256))
+        captured_z_data = np.zeros((number_files*batch_size, 256))
+        captured_z_outsource_data = np.zeros((number_files*batch_size, 256))
 
-        for i in tqdm(range(number_files-1)):
+        for i in tqdm(range(number_files)):
             z_file_list = f"{captured_data_list}/z_{i+1}.pth"
             captured_z = torch.load(z_file_list).to("cpu")
 
@@ -40,11 +40,11 @@ if is_calcualted == False:
         # Print the covariance matrix
         print("Covariance Matrix outsourced:")
         print(covariance_matrix_z)
-        np.save(f"covariance_matrix_{threshold}_z.npy", covariance_matrix_z)
+        np.save(f"./covariance_various_partition_point/covariance_matrix_{threshold}_z.npy", covariance_matrix_z)
 
         print(np.linalg.det(covariance_matrix_z))
 
-        for i in tqdm(range(number_files-1)):
+        for i in tqdm(range(number_files)):
             z_outsource_file_list = f"{captured_data_list}/z_outsource_{i+1}.pth"
             captured_z_outsource = torch.load(z_outsource_file_list).to("cpu")
 
@@ -55,7 +55,7 @@ if is_calcualted == False:
         # Print the covariance matrix
         print("Covariance Matrix outsourced:")
         print(covariance_matrix_z_outsource)
-        np.save(f"covariance_matrix_{threshold}_z_outsource.npy", covariance_matrix_z_outsource)
+        np.save(f"./covariance_various_partition_point/covariance_matrix_{threshold}_z_outsource.npy", covariance_matrix_z_outsource)
 
         print(np.linalg.det(covariance_matrix_z_outsource))
 
