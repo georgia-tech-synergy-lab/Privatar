@@ -34,6 +34,7 @@ captured_distribution_5
 captured_intermediate
 profiled_latent_code
 *.pdf
+*.pth
 *.npy
 data
 
