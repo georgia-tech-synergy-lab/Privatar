@@ -28,7 +28,7 @@ from torch.utils.data import DataLoader, RandomSampler
 from utils_uwing2 import Renderer, gammaCorrect
 import wandb
 
-wandb_enable = True
+wandb_enable = False
 
 def remove_module_prefix(state_dict):
     """
