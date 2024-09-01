@@ -375,7 +375,8 @@ def main(args, camera_config, test_segment):
                         losses["kl"].item(),
                     )
                 )
-                save_img(data, output, "train_%d" % batch_idx)
+                if i < 10:
+                    save_img(data, output, "train_%d" % batch_idx)
 
             if batch_idx % args.val_every == 0:
                 model.eval()
@@ -407,7 +408,8 @@ def main(args, camera_config, test_segment):
                 writer.add_scalar('val/loss_verts', vert_loss, val_idx)
                 writer.add_scalar('val/loss_screen', screen_loss, val_idx)
                 writer.add_scalar('val/loss_kl', kl, val_idx)
-                save_img(data, output, "val_%d" % val_idx)
+                if i < 10:
+                    save_img(data, output, "val_%d" % val_idx)
 
                 val_idx += 1
                 print(
