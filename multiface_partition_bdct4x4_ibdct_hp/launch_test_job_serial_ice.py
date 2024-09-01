@@ -6,7 +6,7 @@ result_path_prefix = "/storage/ice1/3/0/jtong45/Privatar/testing_results/"
 
 val_batch_size = 24
 num_freq_comp_outsourced = 8
-project_name = f"test_bdct4x4_hp_nn_decode_{num_freq_comp_outsourced}"
+project_name = f"test_bdct_hp_ibdct_decoder_{num_freq_comp_outsourced}"
 best_model_path = f"/storage/ice1/3/0/jtong45/Privatar/training_results/bdct_hp_nn_decoder_{num_freq_comp_outsourced}/best_model.pth"
 result_path = f"{result_path_prefix}{project_name}"
 

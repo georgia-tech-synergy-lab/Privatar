@@ -14,7 +14,7 @@ val_batch_size = 24
 num_freq_comp_outsourced = 2
 epochs = 2 
 
-result_path = f"/workspace/uwing2/Privatar/training_results/bdct_hp_nn_decoder_{num_freq_comp_outsourced}"
+result_path = f"/workspace/uwing2/Privatar/training_results/bdct_hp_ibdct_decoder_0"
 if not os.path.exists(result_path):
     os.makedirs(result_path)
 

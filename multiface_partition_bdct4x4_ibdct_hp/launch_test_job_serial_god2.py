@@ -6,7 +6,7 @@ result_path_prefix = "/home/jianming/work/Privatar_prj/testing_results/"
 
 val_batch_size = 8
 num_freq_comp_outsourced = 14
-project_name = f"test_test_bdct4x4_hp_nn_decode_{num_freq_comp_outsourced}"
+project_name = f"test_bdct_hp_ibdct_decoder_{num_freq_comp_outsourced}"
 best_model_path = f"/home/jianming/work/Privatar_prj/training_results/bdct_hp_nn_decoder_{num_freq_comp_outsourced}/best_model.pth"
 result_path = f"{result_path_prefix}{project_name}"
 

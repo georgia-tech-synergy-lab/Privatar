@@ -15,7 +15,7 @@ num_freq_comp_outsourced_list = [2, 4, 6, 8, 10, 12, 14]
 epochs = 2 
 
 for num_freq_comp_outsourced in num_freq_comp_outsourced_list:
-    result_path = f"/workspace/uwing2/Privatar/training_results/bdct_hp_nn_decoder_{num_freq_comp_outsourced}"
+    result_path = f"/workspace/uwing2/Privatar/training_results/bdct_hp_ibdct_decoder_{num_freq_comp_outsourced}"
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
