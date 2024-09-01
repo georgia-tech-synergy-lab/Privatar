@@ -191,6 +191,8 @@ class DeepAppearanceDecoder(nn.Module):
         glorot(self.texture_decoder.upsample[-1].conv2, 1.0)
 
     def forward(self, z, v):
+        print(f"z_size={z.shape}")
+        print(f"v_size={v.shape}")
         view_code = self.relu(self.view_fc(v))
         z_code = self.relu(self.z_fc(z))
         feat = torch.cat((view_code, z_code), 1)

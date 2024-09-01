@@ -97,7 +97,6 @@ def svd_decomposition_covariance_latent_code(covariance_matrix_z_outsource, path
 ### --- mean 8*256
 ### --- std 8*256
 
-
 threshold_list = [4]#, 5]
 number_files = 9073
 batch_size = 8
@@ -107,10 +106,9 @@ num_samples = 1
 path_save_covariance = f"/home/jianming/work/Privatar_prj/profiled_latent_code/noise_variance_matrix_horizontal_partition_{threshold_list[0]}_mutual_bound_{mutual_info_bound}_outsource_path_latent.pth"
 captured_data_list = f"/home/jianming/work/Privatar_prj/testing_results/horizontal_partition_{threshold_list[0]}_latent_code"
 
-
 if __name__ == "__main__":
-    captured_z_outsource_data = np.zeros(((number_files-1)*batch_size, 256))
 
+    captured_z_outsource_data = np.zeros(((number_files-1)*batch_size, 256))
 
     for i in range(number_files-1):
         z_outsource_file_list = f"{captured_data_list}/z_outsource_{i+1}.pth"

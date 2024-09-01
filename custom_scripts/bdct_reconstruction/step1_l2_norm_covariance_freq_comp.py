@@ -11,6 +11,9 @@ if __name__ == "__main__":
         bs, ch, h, w = texture_in.shape
         block_imgs = dct_transform(texture_in, bs, ch, h, w)
         freq_comp.append(block_imgs[frequency_id, :, :, :, :].to("cuda:0"))
+    freq_comp[0].flatten().shape[0]
+    
+    overall_components = np.zero(len(freq_comp), len())
 
     l2_norm_drop_freq_difference_array = torch.zeros(len(freq_comp), len(freq_comp))
     for i, freq_data_pair1 in tqdm(enumerate(freq_comp)):

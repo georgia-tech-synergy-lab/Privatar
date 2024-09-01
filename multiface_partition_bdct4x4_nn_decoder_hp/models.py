@@ -131,7 +131,7 @@ class DeepAppearanceVAEBDCT(nn.Module):
 
     def dct_inverse_transform(self, dct_block_reorder,bs, ch, h, w):
         block_num = h // self.block_size
-        idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, self.block_size, self.block_size)
+        idct_dct_block_reorder = dct_block_reorder.permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, self.block_size, self.block_size)
         inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
         inverse_transformed_img = self.img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
         return inverse_transformed_img
@@ -165,7 +165,6 @@ class DeepAppearanceVAEBDCT(nn.Module):
             z = torch.cat((mean, logstd), -1)
             kl = torch.tensor(0).to(z.device)
         
-
         mean_outsource, logstd_outsource = self.enc_outsourced(dct_block_reorder_outsource, mesh)
         mean_outsource = mean_outsource * 0.1
         logstd_outsource = logstd_outsource * 0.01
@@ -248,7 +247,7 @@ class DeepAppearanceDecoderLayerRed(nn.Module):
 
         z_code_outsource = self.relu(self.z_fc_outsource(z_outsource))
         feat_outsource = torch.cat((view_code, z_code_outsource), 1)
-        texture_code_outsource = self.relu(self.texture_fc_outsource(feat))
+        texture_code_outsource = self.relu(self.texture_fc_outsource(feat_outsource))
         texture_outsource = self.texture_decoder_outsource(texture_code_outsource)
 
         texture_merge = torch.cat((texture_local, texture_outsource), dim=1)

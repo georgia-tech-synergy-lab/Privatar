@@ -288,6 +288,75 @@ def test_img_dct_transform_reorder_noise_outsource(x, bs, ch, h, w, freq_comp_lb
     return inverse_transformed_img
 
 
+## The one used in actual implementations
+## Image frequency cosine transform
+def dct_transform_nn_connect_hp( x, bs, ch, h, w):
+    """
+        The one that directly be used in nn based decoder HP implementation.
+    """
+    rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
+    block_num = h // block_size
+    dct_block = dct.block_dct(rerodered_img) #BDCT
+    # dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(0, 4, 1, 2, 3)
+    return dct_block_reorder
+
+def dct_inverse_transform_nn_connect_hp( dct_block_reorder,bs, ch, h, w):
+    """
+        The one that directly be used in nn based decoder HP implementation.
+    """
+    block_num = h // block_size
+    idct_dct_block_reorder = dct_block_reorder.permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
+    inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
+    inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
+    return inverse_transformed_img
+    
+    ## Image frequency cosine transform
+def test_img_dct_transform_nn_connect_hp(x, bs, ch, h, w):
+    """
+        The one that directly be used in nn based decoder HP implementation.
+    """
+    dct_block_reorder = dct_transform_nn_connect_hp(x, bs, ch, h, w)
+    print(f"dct_block_reorder={dct_block_reorder.shape}")
+    inverse_transformed_img = dct_inverse_transform_nn_connect_hp(dct_block_reorder, bs, ch, h, w)
+    return inverse_transformed_img
+
+
+## The one used in actual implementations
+## Image frequency cosine transform
+def dct_transform_nn_connect( x, bs, ch, h, w):
+    """
+        The one that directly be used in multiface_partition_bdct4x4_nn_decoder
+    """
+    rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
+    block_num = h // block_size
+    dct_block = dct.block_dct(rerodered_img) #BDCT
+    # dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(0, 4, 1, 2, 3).reshape(bs, ch*total_frequency_components, block_num, block_num) # into (bs, ch, block_num, block_num, 16)
+    return dct_block_reorder
+
+def dct_inverse_transform_nn_connect( dct_block_reorder,bs, ch, h, w):
+    """
+        The one that directly be used in multiface_partition_bdct4x4_nn_decoder
+    """
+    block_num = h // block_size
+    idct_dct_block_reorder = dct_block_reorder.view(bs, total_frequency_components, ch, block_num, block_num).permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
+    inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
+    inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
+    return inverse_transformed_img
+    
+    ## Image frequency cosine transform
+def test_img_dct_transform_nn_connect(x, bs, ch, h, w):
+    """
+        The one that directly be used in multiface_partition_bdct4x4_nn_decoder
+    """
+    dct_block_reorder = dct_transform_nn_connect(x, bs, ch, h, w)
+    print(f"dct_block_reorder={dct_block_reorder.shape}")
+    inverse_transformed_img = dct_inverse_transform_nn_connect(dct_block_reorder, bs, ch, h, w)
+    return inverse_transformed_img
+
+
+
 
 """
     Data Set Loading
@@ -365,3 +434,4 @@ test_loader = DataLoader(
     sampler=test_sampler,
     num_workers=n_worker,
 )
+

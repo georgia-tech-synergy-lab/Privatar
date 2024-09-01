@@ -30,7 +30,6 @@ import wandb
 
 wandb_enable = True
 
-
 def remove_module_prefix(state_dict):
     """
     Removes the 'module.' prefix from the keys of the state_dict.

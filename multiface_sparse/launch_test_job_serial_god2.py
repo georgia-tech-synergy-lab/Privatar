@@ -4,8 +4,8 @@ import os
 data_dir = "/scratch2/multiface/dataset"
 result_path_prefix = "/home/jianming/work/Privatar_prj/testing_results/"
 
-val_batch_size = 16
-unified_pruning_ratio = 0.1
+val_batch_size = 4
+unified_pruning_ratio = 0.8
 
 project_name = f"test_sparse_{unified_pruning_ratio}"
 result_path = f"{result_path_prefix}{project_name}"

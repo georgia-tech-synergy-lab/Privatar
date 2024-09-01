@@ -81,7 +81,7 @@ class DeepAppearanceVAEBDCT(nn.Module):
 
     def dct_inverse_transform(self, dct_block_reorder,bs, ch, h, w):
         block_num = h // self.block_size
-        idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, self.block_size, self.block_size)
+        idct_dct_block_reorder = dct_block_reorder.permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, self.block_size, self.block_size)
         inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
         inverse_transformed_img = self.img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
         return inverse_transformed_img

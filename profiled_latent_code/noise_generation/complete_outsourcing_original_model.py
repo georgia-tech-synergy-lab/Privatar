@@ -20,7 +20,6 @@ def generation_l2norm_l2cov(z_data):
     overall_result_cov = overall_result_cov / 256
     print(f"overall_result_cov={overall_result_cov}; s_cov={s_cov}")
 
-
     print("print detailed value of individual elements in convariance:")
     for ele in s_cov:
         print(ele, end=" ")
@@ -34,7 +33,6 @@ def generate_noise_covariance(mutual_info_bound, s_cov):
     for i in range(256):
         noise_variance[i] =  2 * mutual_info_bound / (s_cov[i] * l2_norm_svd_decomposition_original)
     return noise_variance
-    
 
 # Function to sample from a 2D Gaussian distribution
 def sample_2d_gaussian(mean, U_cov, noise_variance, V_cov, path_save_covariance, num_samples=1000):
@@ -92,7 +90,6 @@ mutual_info_bound = 0.1
 num_samples = 1
 path_save_covariance = f"/home/jianming/work/Privatar_prj/profiled_latent_code/original_model_mutual_bound_{mutual_info_bound}_private_path_latent.pth"
 captured_data_list = f"/home/jianming/work/Privatar_prj/testing_results/original_model_latent_code"
-
 
 if __name__ == "__main__":
     captured_z_outsource_data = np.zeros(((number_files-1)*batch_size, 256))
