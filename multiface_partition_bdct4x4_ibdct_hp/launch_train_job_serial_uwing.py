@@ -6,7 +6,7 @@ path_prefix_uwing2 = "/workspace/uwing2/multiface/"
 
 #######
 path_prefix = path_prefix_uwing2
-model_ckpt = "/home/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth"
+model_ckpt = "/workspace/uwing2/multiface/pretrained_model/6795937_best_base_model.pth"
 #######
 
 train_batch_size = 80
