@@ -5,7 +5,7 @@ path_prefix_ice = "/storage/ice1/3/0/jtong45/multiface/"
 
 average_texture_path = "dataset/m--20180227--0000--6795937--GHS/unwrapped_uv_1024/E001_Neutral_Eyes_Open/average/000102.png"
 # Please select one path out of the following three paths based on the server
-model_ckpt = f"/home/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth"
+model_ckpt = f"/storage/ice1/3/0/jtong45/multiface/pretrained_model/best_model.pth"
 
 #######
 path_prefix = path_prefix_ice
