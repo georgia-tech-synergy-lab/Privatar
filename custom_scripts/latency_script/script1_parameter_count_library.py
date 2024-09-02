@@ -5,31 +5,29 @@ from dataset import Dataset
 import json 
 import sys
 import os 
-
+import glob
 model_arch = "baseline" 
-# model_arch = "merge_conv_16chnl" 
-# model_arch = "merge_conv" 
-# model_arch = "multiface_partition_bdct4x4_nn_decoder_hp"
+# model_arch = "multiface_partition_bdct4x4_nn_decoder" 
+# model_arch = "multiface_partition_bdct4x4_nn_decoder_hp" 
+# model_arch = "multiface_partition_bdct4x4_ibdct"
+# model_arch = "multiface_partition_bdct4x4_ibdct_hp"
 sweep_parameter_list = [5]
-
-if model_arch == "merge_conv_16chnl":
-    from script1_models.multiface_partition_bdct4x4_merge_conv_end_16chnl import DeepAppearanceVAEHPLayerRed as overallModel
-
-if model_arch == "merge_conv":
-    from script1_models.multiface_partition_bdct4x4_merge_conv_end import DeepAppearanceVAEHPLayerRed as overallModel
 
 if model_arch == "baseline":
     from script1_models.multiface_baseline import DeepAppearanceVAE as overallModel
-
-if model_arch == "hp_bdct4x4":
-    from script1_models.multiface_partition_bdct4x4 import DeepAppearanceVAE_Horizontal_Partition as overallModel
-    sweep_parameter_list = [0.1, 0.3, 0.35, 0.4, 0.42, 0.45, 0.5, 0.6, 0.7, 1.1, 1.2, 3.5, 5]
 
 if model_arch == "multiface_partition_bdct4x4_nn_decoder":
     from script1_models.multiface_partition_bdct4x4_nn_decoder import DeepAppearanceVAEBDCT as overallModel
 
 if model_arch == "multiface_partition_bdct4x4_nn_decoder_hp":
     from script1_models.multiface_partition_bdct4x4_nn_decoder_hp import DeepAppearanceVAEBDCT as overallModel
+    sweep_parameter_list = [2, 4, 6, 8, 10, 12, 14]
+
+if model_arch == "multiface_partition_bdct4x4_ibdct":
+    from script1_models.multiface_partition_bdct4x4_ibdct import DeepAppearanceVAE_IBDCT as overallModel
+
+if model_arch == "multiface_partition_bdct4x4_ibdct_hp":
+    from script1_models.multiface_partition_bdct4x4_ibdct_hp import DeepAppearanceVAE_IBDCT as overallModel
     sweep_parameter_list = [2, 4, 6, 8, 10, 12, 14]
 
 tex_size = 1024
@@ -41,7 +39,7 @@ subject_id = 6795937
 
 test_segment = "./test_segment.json"
 
-camera_config_path = "/home/jianming/work/Privatar_prj/multiface_partition_bdct4x4_merge_conv_end_16chnl/camera_configs/camera-split-config_6795937.json"
+camera_config_path = "/home/jianming/work/Privatar_prj/multiface/camera_configs/camera-split-config_6795937.json"
 
 if os.path.exists(camera_config_path):
     print(f"camera config file for {subject_id} exists, loading...")
