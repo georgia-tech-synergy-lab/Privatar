@@ -26,7 +26,8 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
         non=False,
         bilinear=False,
         result_path="",
-        save_latent_code=False
+        save_latent_code=False,
+        gaussian_noise_covariance_path=None
     ):
         super(DeepAppearanceVAE_IBDCT, self).__init__()
         z_dim = n_latent if mode == "vae" else n_latent * 2
@@ -48,6 +49,15 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
             if not os.path.exists(self.latent_code_path):
                 os.makedirs(self.latent_code_path)
         self.iter = 0
+
+        if gaussian_noise_covariance_path is not None:
+            self.gaussian_noise_covariance = np.diag(np.load(gaussian_noise_covariance_path))
+            self.mean = np.zeros(self.gaussian_noise_covariance.shape[0]) 
+            self.apply_gaussian_noise = True
+        else:
+            self.gaussian_noise_covariance = None
+            self.mean = None
+            self.apply_gaussian_noise = False
 
     def img_reorder_pure_bdct(self, x, bs, ch, h, w):
         # x = (x + 1) / 2 * 255
@@ -107,9 +117,17 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
         else:
             z = torch.cat((mean, logstd), -1)
             kl = torch.tensor(0).to(z.device)
+
+        #######################
+        ## Add noise to whole latent code
+        if self.apply_gaussian_noise:
+            samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.gaussian_noise_covariance, z.shape[0]))
+            samples = samples.to("cuda:0")
+            samples = samples.to(z.dtype)
+            z = z + samples
+        #######################
             
         pred_tex_comps, pred_mesh = self.dec(z, view)
-        print(f"pred_tex_comps={pred_tex_comps.shape}")
         pred_tex = self.dct_inverse_transform(pred_tex_comps, bs, ch, h, w)
 
         pred_mesh = pred_mesh.view((b, n, 3))

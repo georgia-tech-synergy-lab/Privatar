@@ -66,38 +66,7 @@ def main(args, camera_config, test_segment):
     n_cams = len(set(camera_config["train"]).union(set(dataset_test.cameras)))
     if args.arch == "base":
         model = DeepAppearanceVAE_IBDCT(
-            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams
-        ).to(device)
-    elif args.arch == "res":
-        model = DeepAppearanceVAE_IBDCT(
-            args.tex_size,
-            args.mesh_inp_size,
-            n_latent=args.nlatent,
-            res=True,
-            n_cams=n_cams,
-        ).to(device)
-    elif args.arch == "warp":
-        model = WarpFieldVAE(
-            args.tex_size, args.mesh_inp_size, z_dim=args.nlatent, n_cams=n_cams
-        ).to(device)
-    elif args.arch == "non":
-        model = DeepAppearanceVAE_IBDCT(
-            args.tex_size,
-            args.mesh_inp_size,
-            n_latent=args.nlatent,
-            res=False,
-            non=True,
-            n_cams=n_cams,
-        ).to(device)
-    elif args.arch == "bilinear":
-        model = DeepAppearanceVAE_IBDCT(
-            args.tex_size,
-            args.mesh_inp_size,
-            n_latent=args.nlatent,
-            res=False,
-            non=False,
-            bilinear=True,
-            n_cams=n_cams,
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, result_path=args.result_path, save_latent_code=args.save_latent_code, gaussian_noise_covariance_path=args.gaussian_noise_covariance_path
         ).to(device)
     else:
         raise NotImplementedError
@@ -106,12 +75,7 @@ def main(args, camera_config, test_segment):
     # state_dict = torch.load(model_dir)
     print("loading model from", args.model_path)
     state_dict = torch.load(args.model_path, map_location="cuda:0")
-
-    new_state_dict = OrderedDict()
-    for k, v in state_dict.items():
-        name = k[7:]  # remove 'module.'
-        new_state_dict[name] = v
-    model.load_state_dict(new_state_dict)
+    model.load_state_dict(state_dict)
     model = model.to(device)
 
     renderer = Renderer()
@@ -475,6 +439,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--save_img", action='store_true', default=False, help="Control knob to enable image save"
+    )
+    parser.add_argument(
+        "--gaussian_noise_covariance_path", type=str, default=None, help="The path of the noise covariance"
     )
 
     parser.add_argument("--model_path", type=str, default=None, help="Model path")

@@ -28,7 +28,7 @@ from torch.utils.data import DataLoader, RandomSampler
 from utils import Renderer, gammaCorrect
 import wandb
 
-wandb_enable = False
+wandb_enable = True
 
 def remove_module_prefix(state_dict):
     """
@@ -93,7 +93,7 @@ def main(args, camera_config, test_segment):
 
     n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
     model = DeepAppearanceVAE_IBDCT(
-        args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, result_path=args.result_path, save_latent_code=args.save_latent_code
+        args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, result_path=args.result_path, save_latent_code=args.save_latent_code, gaussian_noise_covariance_path=args.gaussian_noise_covariance_path
     ).to(device)
 
     renderer = Renderer()
@@ -609,8 +609,18 @@ if __name__ == "__main__":
         help="Jianming Tong",
     )
     parser.add_argument(
-        "--save_latent_code", action='store_true', default=False, help="Control knob to save latent code to external devices"
+        "--save_latent_code",
+        action='store_true', 
+        default=False, 
+        help="save latent code to the result folder ./result_path/latent_code"
     )
+    parser.add_argument(
+        "--save_img", action='store_true', default=False, help="Control knob to enable image save"
+    )
+    parser.add_argument(
+        "--gaussian_noise_covariance_path", type=str, default=None, help="The path of the noise covariance"
+    )
+
 
     experiment_args = parser.parse_args()
     print(experiment_args)
