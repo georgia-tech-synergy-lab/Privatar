@@ -1,0 +1,235 @@
+{
+    "os": "Linux-6.8.0-40-generic-x86_64-with-debian-bookworm-sid",
+    "python": "3.7.16",
+    "heartbeatAt": "2024-09-03T13:48:36.520701",
+    "startedAt": "2024-09-03T13:48:36.184621",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "--data_dir",
+        "/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS",
+        "--krt_dir",
+        "/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT",
+        "--framelist_test",
+        "/home/jianming/work/Privatar_prj/experiment_scripts/empirical_attack/selected_expression_frame_list.txt",
+        "--result_path",
+        "/home/jianming/work/Privatar_prj/attacking_results/attack_bdct_hp_ibdct_decoder_0",
+        "--test_segment",
+        "./test_segment.json",
+        "--lambda_screen",
+        "1",
+        "--model_path",
+        "/home/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_0/best_model.pth",
+        "--arch",
+        "base",
+        "--project_name",
+        "attack_bdct_hp_ibdct_decoder_0",
+        "--author_name",
+        "jimmytong",
+        "--val_batch_size",
+        "1",
+        "--gaussian_noise_covariance_path",
+        "/home/jianming/work/Privatar_prj/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_ibdct_decoder_0_1.npy",
+        "--camera_configs_path",
+        "/home/jianming/work/Privatar_prj/experiment_scripts/empirical_attack/attack-camera-split-config_6795937.json"
+    ],
+    "state": "running",
+    "program": "test_attack_run.py",
+    "codePathLocal": "test_attack_run.py",
+    "codePath": "multiface_partition_bdct4x4_ibdct/test_attack_run.py",
+    "git": {
+        "remote": "https://github.com/georgia-tech-synergy-lab/Privatar.git",
+        "commit": "f7dba622921538b829b1a1ba5d4f5bd654a58108"
+    },
+    "email": "jianming.gatech@gmail.com",
+    "root": "/home/jianming/work/Privatar_prj",
+    "host": "god2",
+    "username": "jianming",
+    "executable": "/home/jianming/conda/envs/pica37/bin/python",
+    "cpu_count": 16,
+    "cpu_count_logical": 32,
+    "cpu_freq": {
+        "current": 3011.8355,
+        "min": 2200.0,
+        "max": 3400.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3668.574,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3400.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3668.688,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3657.593,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3660.244,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3649.693,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3676.823,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3400.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3400.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 4575.246,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3657.89,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3917.842,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3686.237,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3660.164,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 4575.302,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3400.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 3666.754,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        },
+        {
+            "current": 2200.0,
+            "min": 2200.0,
+            "max": 3400.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 1662.1284980773926,
+            "used": 667.4248924255371
+        }
+    },
+    "gpu": "NVIDIA GeForce RTX 3090",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA GeForce RTX 3090",
+            "memory_total": 25769803776
+        }
+    ],
+    "memory": {
+        "total": 62.70597457885742
+    }
+}

@@ -27,7 +27,8 @@ block_size = 4
 total_frequency_components = block_size * block_size
 check_reconstruct_img = True
 save_block_img_to_drive = False
-load_attack_dataset = False
+load_attack_dataset = True
+load_test_dataset = False
 
 def load_image(image_path):
     image = Image.open(image_path).convert('RGB')
@@ -404,44 +405,44 @@ else:
 
 test_segment = ["EXP_ROM", "EXP_free_face"]
 
-## Generate Data Pair
-dataset_test = Dataset(
-    data_dir,
-    krt_dir,
-    framelist_train,
-    tex_size,
-    camset=None if camera_config is None else camera_config["full"]["test"],
-    exclude_prefix=test_segment,
-)
+if load_test_dataset:
+    ## Generate Data Pair
+    dataset_test = Dataset(
+        data_dir,
+        krt_dir,
+        framelist_train,
+        tex_size,
+        camset=None if camera_config is None else camera_config["full"]["test"],
+        exclude_prefix=test_segment,
+    )
 
-print(len(dataset_test))
-texstd = dataset_test.texstd
-texmean = cv2.resize(dataset_test.texmean, (tex_size, tex_size))
-texmin = cv2.resize(dataset_test.texmin, (tex_size, tex_size))
-texmax = cv2.resize(dataset_test.texmax, (tex_size, tex_size))
-texmean = torch.tensor(texmean).permute((2, 0, 1))[None, ...].to("cuda:0")
-vertstd = dataset_test.vertstd
-vertmean = (
-    torch.tensor(dataset_test.vertmean, dtype=torch.float32)
-    .view((1, -1, 3))
-    .to("cuda:0")
-)
+    print(len(dataset_test))
+    texstd = dataset_test.texstd
+    texmean = cv2.resize(dataset_test.texmean, (tex_size, tex_size))
+    texmin = cv2.resize(dataset_test.texmin, (tex_size, tex_size))
+    texmax = cv2.resize(dataset_test.texmax, (tex_size, tex_size))
+    texmean = torch.tensor(texmean).permute((2, 0, 1))[None, ...].to("cuda:0")
+    vertstd = dataset_test.vertstd
+    vertmean = (
+        torch.tensor(dataset_test.vertmean, dtype=torch.float32)
+        .view((1, -1, 3))
+        .to("cuda:0")
+    )
 
-test_sampler = SequentialSampler(dataset_test)
+    test_sampler = SequentialSampler(dataset_test)
 
-test_loader = DataLoader(
-    dataset_test,
-    val_batch_size,
-    sampler=test_sampler,
-    num_workers=n_worker,
-)
+    test_loader = DataLoader(
+        dataset_test,
+        val_batch_size,
+        sampler=test_sampler,
+        num_workers=n_worker,
+    )
 
 
 ## Generate Data Pair -- for empirical attack setup
 if load_attack_dataset:
     attack_camera_config_path = f"/home/jianming/work/Privatar_prj/experiment_scripts/empirical_attack/attack-camera-split-config_{subject_id}.json"
     result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
-
 
     print(f"camera config file for {subject_id} exists, loading...")
     f = open(attack_camera_config_path, "r")
