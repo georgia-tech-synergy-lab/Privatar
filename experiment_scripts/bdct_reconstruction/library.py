@@ -27,8 +27,8 @@ block_size = 4
 total_frequency_components = block_size * block_size
 check_reconstruct_img = True
 save_block_img_to_drive = False
-load_attack_dataset = True
-load_test_dataset = False
+load_attack_dataset = False
+load_test_dataset = True
 
 def load_image(image_path):
     image = Image.open(image_path).convert('RGB')

@@ -163,7 +163,7 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
             samples = samples.to(z.dtype)
             z = z + samples
         #######################
-            
+        
         pred_tex_comps = self.dec.attack_forward(z, view)
         return pred_tex_comps
 

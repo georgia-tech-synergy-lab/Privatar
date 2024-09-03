@@ -31,7 +31,8 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
         ## Added for horizontal partitioning
         num_freq_comp_outsourced=4, # must be multiple of 2
         result_path=False,
-        save_latent_code=False
+        save_latent_code=False,
+        gaussian_noise_covariance_path=None
     ):
         super(DeepAppearanceVAE_IBDCT, self).__init__()
         n_blocks = 4
@@ -62,6 +63,15 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
             if not os.path.exists(self.latent_code_path):
                 os.makedirs(self.latent_code_path)
         self.iter = 0
+
+        if gaussian_noise_covariance_path is not None:
+            self.gaussian_noise_covariance = np.diag(np.load(gaussian_noise_covariance_path))
+            self.mean = np.zeros(self.gaussian_noise_covariance.shape[0]) 
+            self.apply_gaussian_noise = True
+        else:
+            self.gaussian_noise_covariance = None
+            self.mean = None
+            self.apply_gaussian_noise = False
         
 
     def generate_freq_group_index(self, l2_diff_list, num_freq_comp_outsourced=4):
@@ -182,6 +192,15 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
             z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
             kl_outsource = torch.tensor(0).to(z.device)
 
+        #######################
+        ## Add noise to whole latent code
+        if self.apply_gaussian_noise:
+            samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.gaussian_noise_covariance, z_outsource.shape[0]))
+            samples = samples.to(z_outsource.device)
+            samples = samples.to(z_outsource.dtype)
+            z_outsource = z_outsource + samples
+        #######################
+
         kl_merge = len(self.local_freq_list)/self.total_frequency_component*kl + len(self.outsourced_freq_list)/self.total_frequency_component*kl_outsource
 
         pred_tex_freq_components, pred_mesh = self.dec(z, z_outsource, view)
@@ -192,6 +211,44 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
             pred_tex = self.cc(pred_tex, cams)
 
         return pred_tex, pred_mesh, kl_merge
+
+    def attack_forward(self, avgtex, mesh, view, cams=None):
+        b, n, _ = mesh.shape
+        mesh = mesh.view((b, -1))
+
+        bs, ch, h, w = avgtex.shape
+        dct_block_reorder = self.dct_transform(avgtex, bs, ch, h, w)
+        dct_block_reorder_outsource = dct_block_reorder[:,self.outsourced_freq_list,:,:,:]
+
+        block_num = h // self.block_size
+        dct_block_reorder_outsource = dct_block_reorder_outsource.reshape(bs, ch*len(self.outsourced_freq_list), block_num, block_num) # into (bs, ch, block_num, block_num, 16)
+    
+        mean_outsource, logstd_outsource = self.enc_outsourced(dct_block_reorder_outsource, mesh)
+        mean_outsource = mean_outsource * 0.1
+        logstd_outsource = logstd_outsource * 0.01
+        if self.mode == "vae":
+            std_outsource = torch.exp(logstd_outsource)
+            eps_outsource = torch.randn_like(mean_outsource)
+            z_outsource = mean_outsource + std_outsource * eps_outsource
+            if self.save_latent_code:
+                torch.save(z_outsource, f"{self.latent_code_path}/z_outsource_{self.iter}.pth")
+                self.iter = self.iter + 1
+        else:
+            z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
+
+        #######################
+        ## Add noise to whole latent code
+        if self.apply_gaussian_noise:
+            samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.gaussian_noise_covariance, z_outsource.shape[0]))
+            samples = samples.to(z_outsource.device)
+            samples = samples.to(z_outsource.dtype)
+            z_outsource = z_outsource + samples
+        #######################
+
+        texture_outsource = self.dec.attack_forward(z_outsource, view)
+
+        return texture_outsource
+
 
     def get_mesh_branch_params(self):
         p = self.enc.get_mesh_branch_params() + self.dec.get_mesh_branch_params()
@@ -257,6 +314,15 @@ class DeepAppearanceDecoderLayerRedChnlExpand(nn.Module):
         texture_merge = torch.cat((texture_local, texture_outsource), dim=1)
 
         return texture_merge, mesh
+    
+    def attack_forward(self, z_outsource, v):
+        view_code = self.relu(self.view_fc(v))
+        z_code_outsource = self.relu(self.z_fc_outsource(z_outsource))
+        feat_outsource = torch.cat((view_code, z_code_outsource), 1)
+        texture_code_outsource = self.relu(self.texture_fc_outsource(feat_outsource))
+        texture_outsource = self.texture_decoder_outsource(texture_code_outsource)
+
+        return texture_outsource
 
     def get_mesh_branch_params(self):
         return list(self.mesh_fc.parameters())

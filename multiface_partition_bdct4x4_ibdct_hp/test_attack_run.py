@@ -29,7 +29,7 @@ from torch.utils.data import DataLoader, SequentialSampler
 from utils import Renderer, gammaCorrect
 import wandb
 
-wandb_enable = False
+wandb_enable = True
 
 def main(args, camera_config):
     device = torch.device("cpu")
@@ -102,13 +102,11 @@ def main(args, camera_config):
     # Collect the various frequency components of various 
     ############################## 
     expressions_freq_comps = []
-    collect_avg_tex = []
     for i, data in tqdm(enumerate(attack_loader)):
         avg_tex = data["avg_tex"].to(device)
         bs, ch, h, w = avg_tex.shape
         dct_block_reorder = model.dct_transform(avg_tex, bs, ch, h, w)
         expressions_freq_comps.append(dct_block_reorder)
-        collect_avg_tex.append(avg_tex)
 
     val_idx = 0
     model.train()
@@ -118,25 +116,14 @@ def main(args, camera_config):
     begin_time = time.time()
 
     attack_accuracy = []
-    direct_guess_accuacy = []
     for i, data in tqdm(enumerate(attack_loader)):
         avg_tex = data["avg_tex"].to(device)
         view = data["view"].to(device)
         verts = data["aligned_verts"].to(device)
 
-        avg_direct_guess = torch.ones(len(expressions_freq_comps))*10000
-        for k, avg_tex_collect in enumerate(collect_avg_tex):
-            avg_direct_guess[k] = mse(avg_tex_collect, avg_tex)
-        direct_guess_expression_id = torch.argmin(avg_direct_guess)
-        if direct_guess_expression_id == i:
-            direct_guess_accuacy.append(1)
-        else:
-            direct_guess_accuacy.append(0)
-        
-
         pred_tex_comps = model.attack_forward(avg_tex, verts, view)
         ## calculate the loss between pred_tex_comps and the pre-calculated tex components
-        tex_loss_expression_list = torch.ones(len(expressions_freq_comps))*10000
+        tex_loss_expression_list = torch.zeros(len(expressions_freq_comps))
         for j, expression in enumerate(expressions_freq_comps):
             tex_loss_expression_list[j] = mse(expression, pred_tex_comps)
         guess_expression_id = torch.argmin(tex_loss_expression_list)
@@ -145,9 +132,7 @@ def main(args, camera_config):
             attack_accuracy.append(1)
         else:
             attack_accuracy.append(0)
-    print(f"direct_guess_accuacy={np.array(direct_guess_accuacy).mean()}")
-    assert(np.array(direct_guess_accuacy).mean()==1)
-    print(f"attack_accuracy={attack_accuracy}")
+        
     attack_accuracy_mean = np.array(attack_accuracy).mean()
     writer.add_scalar('attack/accuracy_mean', attack_accuracy_mean, val_idx)
 
