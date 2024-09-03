@@ -1,2 +1,0 @@
-
-attack_accuracy_mean 0.015385
