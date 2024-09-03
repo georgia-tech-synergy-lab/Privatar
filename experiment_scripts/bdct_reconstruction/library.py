@@ -15,7 +15,7 @@ import os
 import cv2
 import json 
 import glob
-import tqdm
+from tqdm import tqdm
 import torch
 import numpy as np
 import torch.nn as nn
@@ -27,6 +27,7 @@ block_size = 4
 total_frequency_components = block_size * block_size
 check_reconstruct_img = True
 save_block_img_to_drive = False
+load_attack_dataset = False
 
 def load_image(image_path):
     image = Image.open(image_path).convert('RGB')
@@ -434,4 +435,32 @@ test_loader = DataLoader(
     sampler=test_sampler,
     num_workers=n_worker,
 )
+
+
+## Generate Data Pair -- for empirical attack setup
+if load_attack_dataset:
+    attack_camera_config_path = f"/home/jianming/work/Privatar_prj/experiment_scripts/empirical_attack/attack-camera-split-config_{subject_id}.json"
+    result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
+
+
+    print(f"camera config file for {subject_id} exists, loading...")
+    f = open(attack_camera_config_path, "r")
+    attack_camera_config = json.load(f)
+    f.close()
+    test_segment = ["EXP_ROM", "EXP_free_face"]
+
+    dataset_attack = Dataset(
+        data_dir,
+        krt_dir,
+        framelist_train,
+        tex_size,
+        camset= attack_camera_config["full"]["attack"],
+    )
+    attack_sampler = SequentialSampler(dataset_attack)
+    attack_loader = DataLoader(
+        dataset_attack,
+        val_batch_size,
+        sampler=attack_sampler,
+        num_workers=n_worker,
+    )
 
