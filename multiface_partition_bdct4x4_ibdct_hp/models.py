@@ -41,8 +41,7 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
 
         z_dim = n_latent if mode == "vae" else n_latent * 2
         self.mode = mode
-        outsourced_channel_ratio, local_channel_ratio, self.local_freq_list, self.outsourced_freq_list = self.generate_freq_group_index(l2_diff_list, num_freq_comp_outsourced)
-        
+        self.outsourced_channel_ratio, self.local_channel_ratio, self.local_freq_list, self.outsourced_freq_list, self.form_group, self.normalize_list, self.sorted_index_array = self.generate_freq_group_index(l2_diff_list, num_freq_comp_outsourced)
 
         self.enc = DeepApperanceEncoderLayerRed(
             tex_size, mesh_inp_size, n_latent=z_dim, res=res, channel_ratio=len(self.local_freq_list)
@@ -52,7 +51,7 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
         )
 
         self.dec = DeepAppearanceDecoderLayerRedChnlExpand(
-            tex_size, mesh_inp_size, z_dim=z_dim, res=res, non=non, bilinear=bilinear, local_channel_ratio=local_channel_ratio, outsourced_channel_ratio=outsourced_channel_ratio
+            tex_size, mesh_inp_size, z_dim=z_dim, res=res, non=non, bilinear=bilinear, local_channel_ratio=self.local_channel_ratio, outsourced_channel_ratio=self.outsourced_channel_ratio
         )
 
         self.cc = ColorCorrection(n_cams)
@@ -73,7 +72,6 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
             self.mean = None
             self.apply_gaussian_noise = False
         
-
     def generate_freq_group_index(self, l2_diff_list, num_freq_comp_outsourced=4):
         min_val = np.min(l2_diff_list)
         new_val_list = l2_diff_list / min_val
@@ -108,7 +106,7 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
                 break
         local_freq_list = [i for i in range(self.total_frequency_component) if i not in outsourced_freq_list ]
         local_channel_ratio = np.sum(np.round(form_group)) - outsourced_channel_ratio
-        return int(outsourced_channel_ratio), int(local_channel_ratio), local_freq_list, outsourced_freq_list # normalize_list, sorted_index_array
+        return int(outsourced_channel_ratio), int(local_channel_ratio), local_freq_list, outsourced_freq_list, form_group, normalize_list, sorted_index_array
 
     def img_reorder_pure_bdct(self, x, bs, ch, h, w):
         # x = (x + 1) / 2 * 255
@@ -146,7 +144,6 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
         inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
         inverse_transformed_img = self.img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
         return inverse_transformed_img
-
 
     def forward(self, avgtex, mesh, view, cams=None):
         b, n, _ = mesh.shape
@@ -248,7 +245,6 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
         texture_outsource = self.dec.attack_forward(z_outsource, view)
 
         return texture_outsource
-
 
     def get_mesh_branch_params(self):
         p = self.enc.get_mesh_branch_params() + self.dec.get_mesh_branch_params()

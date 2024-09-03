@@ -29,7 +29,8 @@ from torch.utils.data import DataLoader, SequentialSampler
 from utils import Renderer, gammaCorrect
 import wandb
 
-wandb_enable = True
+wandb_enable = False
+accumulate_channel = True
 
 def main(args, camera_config):
     device = torch.device("cpu")
@@ -101,12 +102,50 @@ def main(args, camera_config):
     ##############################
     # Collect the various frequency components of various 
     ############################## 
-    expressions_freq_comps = []
-    for i, data in tqdm(enumerate(attack_loader)):
-        avg_tex = data["avg_tex"].to(device)
-        bs, ch, h, w = avg_tex.shape
-        dct_block_reorder = model.dct_transform(avg_tex, bs, ch, h, w)
-        expressions_freq_comps.append(dct_block_reorder[:,model.outsourced_freq_list,:,:,:])
+    print(model.outsourced_channel_ratio, model.local_channel_ratio, model.local_freq_list, model.outsourced_freq_list, model.form_group, model.normalize_list, model.sorted_index_array)
+
+    # version 1: following the reconstruction pipeline
+    if not accumulate_channel:
+        expressions_freq_comps = []
+        for i, data in tqdm(enumerate(attack_loader)):
+            avg_tex = data["avg_tex"].to(device)
+            bs, ch, h, w = avg_tex.shape
+            block_num = h // model.block_size
+            dct_block_reorder = model.dct_transform(avg_tex, bs, ch, h, w)
+            dct_block_reorder = dct_block_reorder.reshape(bs, ch*model.total_frequency_component, block_num, block_num)
+
+            projected_outsourced_freq_comp = torch.zeros((bs, model.outsourced_channel_ratio*ch, block_num, block_num))
+            # print(projected_outsourced_freq_comp.shape)
+            overall_channel = model.outsourced_channel_ratio - 1
+            # Fill in each component group value
+            for index, freq_pair in enumerate(model.sorted_index_array):
+                if model.normalize_list[freq_pair[0]] + model.normalize_list[freq_pair[1]] < 2:
+                    # merge two into one.
+                    # print(overall_channel*ch,(overall_channel+1)*ch)
+                    # print(projected_outsourced_freq_comp[0,overall_channel*ch:(overall_channel+1)*ch,:,:].shape)
+                    projected_outsourced_freq_comp[0,overall_channel*ch:(overall_channel+1)*ch,:,:] = dct_block_reorder[0,ch*freq_pair[0]:ch*(freq_pair[0]+1),:,:] + dct_block_reorder[0,ch*freq_pair[1]:ch*(freq_pair[1]+1),:,:]
+                    overall_channel = overall_channel - 1
+                else:
+                    # print(overall_channel*ch,(overall_channel+1)*ch)
+                    # print(projected_outsourced_freq_comp[0,overall_channel*ch:(overall_channel+1)*ch,:,:].shape)
+                    projected_outsourced_freq_comp[0,overall_channel*ch:(overall_channel+1)*ch,:,:] = dct_block_reorder[0,ch*freq_pair[0]:ch*(freq_pair[0]+1),:,:]
+                    overall_channel = overall_channel - 1
+                    # print(overall_channel*ch,(overall_channel+1)*ch)
+                    # print(projected_outsourced_freq_comp[0,overall_channel*ch:(overall_channel+1)*ch,:,:].shape)
+                    projected_outsourced_freq_comp[0,overall_channel*ch:(overall_channel+1)*ch,:,:] = dct_block_reorder[0,ch*freq_pair[1]:ch*(freq_pair[1]+1),:,:]
+                    overall_channel = overall_channel - 1
+            expressions_freq_comps.append(projected_outsourced_freq_comp)
+    # version 2: accumulate everything
+    else:
+        expressions_freq_comps = []
+        for i, data in tqdm(enumerate(attack_loader)):
+            avg_tex = data["avg_tex"].to(device)
+            bs, ch, h, w = avg_tex.shape
+            block_num = h // model.block_size
+            dct_block_reorder = model.dct_transform(avg_tex, bs, ch, h, w)
+            dct_block_reorder = dct_block_reorder[:, model.outsourced_freq_list, :, :, :].reshape(bs, ch*len(model.outsourced_freq_list), block_num, block_num)
+
+            expressions_freq_comps.append(torch.sum(dct_block_reorder, dim=1))    
 
     val_idx = 0
     model.train()
@@ -127,8 +166,14 @@ def main(args, camera_config):
         pred_tex_comps = model.attack_forward(avg_tex, verts, view)
         ## calculate the loss between pred_tex_comps and the pre-calculated tex components
         tex_loss_expression_list = torch.zeros(len(expressions_freq_comps))
+
         for j, expression in enumerate(expressions_freq_comps):
-            tex_loss_expression_list[j] = mse(expression, pred_tex_comps)
+            try: 
+                tex_loss_expression_list[j] = mse(expression, torch.sum(pred_tex_comps, dim=1))
+            except:
+                print(f"expression.shape={expression.shape}")
+                print(f"pred_tex_comps.shape={pred_tex_comps.shape}")
+                raise Exception("size mismatch")
         guess_expression_id = torch.argmin(tex_loss_expression_list)
 
         if guess_expression_id == i:
