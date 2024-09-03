@@ -5,15 +5,15 @@ data_dir = "/workspace/uwing2/multiface"
 result_path_prefix = "/workspace/uwing2/Privatar/testing_results/"
 
 val_batch_size = 10
-num_freq_comp_outsourced_list = [14] #[2, 4, 6, 8, 10, 12, 14]
-mi_list = [1, 0.1, 0.01]
+num_freq_comp_outsourced_list = [2] #[2, 4, 6, 8, 10, 12, 14]
+mi_list = [0.1, 0.01]
 
 for num_freq_comp_outsourced in num_freq_comp_outsourced_list:
-    best_model_path = f"/workspace/uwing2/Privatar/training_results/bdct_hp_nn_decoder_{num_freq_comp_outsourced}/best_model.pth"
+    best_model_path = f"/workspace/uwing2/Privatar/training_results/bdct_hp_ibdct_decoder_{num_freq_comp_outsourced}/best_model.pth"
     for v in mi_list:
         project_name = f"noisy_test_bdct_hp_ibdct_decoder_{num_freq_comp_outsourced}_{v}"
         result_path = f"{result_path_prefix}{project_name}_{v}"
-        gaussian_noise_covariance_path = f"/home/jianming/work/Privatar_prj/custom_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_{num_freq_comp_outsourced}_{v}.npy"
+        gaussian_noise_covariance_path = f"/workspace/uwing2/Privatar/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_{num_freq_comp_outsourced}_{v}.npy"
             
         if not os.path.exists(result_path):
             os.makedirs(result_path)

@@ -31,6 +31,7 @@ import wandb
 
 wandb_enable = False
 accumulate_channel = True
+attack_from_high_frequency_channel = True
 
 def main(args, camera_config):
     device = torch.device("cpu")
@@ -102,11 +103,9 @@ def main(args, camera_config):
     ##############################
     # Collect the various frequency components of various 
     ############################## 
-    print(model.outsourced_channel_ratio, model.local_channel_ratio, model.local_freq_list, model.outsourced_freq_list, model.form_group, model.normalize_list, model.sorted_index_array)
-
     # version 1: following the reconstruction pipeline
+    expressions_freq_comps = []
     if not accumulate_channel:
-        expressions_freq_comps = []
         for i, data in tqdm(enumerate(attack_loader)):
             avg_tex = data["avg_tex"].to(device)
             bs, ch, h, w = avg_tex.shape
@@ -135,9 +134,19 @@ def main(args, camera_config):
                     projected_outsourced_freq_comp[0,overall_channel*ch:(overall_channel+1)*ch,:,:] = dct_block_reorder[0,ch*freq_pair[1]:ch*(freq_pair[1]+1),:,:]
                     overall_channel = overall_channel - 1
             expressions_freq_comps.append(projected_outsourced_freq_comp)
-    # version 2: accumulate everything
+    # version 2: only reconstruct higher frequency channels as BDCT use it to reconstruct overall data anyway
+    elif attack_from_high_frequency_channel:
+        for i, data in tqdm(enumerate(attack_loader)):
+            avg_tex = data["avg_tex"].to(device)
+            bs, ch, h, w = avg_tex.shape
+            block_num = h // model.block_size
+            dct_block_reorder = model.dct_transform(avg_tex, bs, ch, h, w)
+            dct_block_reorder = dct_block_reorder[:, model.total_frequency_component-len(model.outsourced_freq_list):model.total_frequency_component, :, :, :].reshape(bs, ch*len(model.outsourced_freq_list), block_num, block_num)
+
+            expressions_freq_comps.append(torch.sum(dct_block_reorder, dim=1))    
+        pass
+    # version 3: accumulate all channels
     else:
-        expressions_freq_comps = []
         for i, data in tqdm(enumerate(attack_loader)):
             avg_tex = data["avg_tex"].to(device)
             bs, ch, h, w = avg_tex.shape
@@ -180,7 +189,7 @@ def main(args, camera_config):
             attack_accuracy.append(1)
         else:
             attack_accuracy.append(0)
-        
+    
     attack_accuracy_mean = np.array(attack_accuracy).mean()
     writer.add_scalar('attack/accuracy_mean', attack_accuracy_mean, val_idx)
 
