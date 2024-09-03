@@ -116,7 +116,10 @@ def main(args, camera_config):
     model.eval()
     model.to(device)
     begin_time = time.time()
-
+    
+    ##############################
+    # Mount Attack
+    ############################## 
     attack_accuracy = []
     direct_guess_accuacy = []
     for i, data in tqdm(enumerate(attack_loader)):

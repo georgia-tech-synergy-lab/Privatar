@@ -57,7 +57,7 @@ def main(args, camera_config, test_segment):
     n_cams = len(set(camera_config["train"]).union(set(dataset_test.cameras)))
     if args.arch == "base":
         model = DeepAppearanceVAE_IBDCT(
-            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code, gaussian_noise_covariance_path=args.gaussian_noise_covariance_path
         ).to(device)
     else:
         raise NotImplementedError
@@ -436,7 +436,10 @@ if __name__ == "__main__":
         help="save latent code to the result folder ./result_path/latent_code"
     )
     parser.add_argument(
-        "--apply_gaussian_noise", action='store_true', default=False, help="Control knob to enable noisy training"
+        "--gaussian_noise_covariance_path", 
+        type=str, 
+        default=None, 
+        help="The path of the noise covariance"
     )
     parser.add_argument(
         "--save_img", action='store_true', default=False, help="Control knob to enable image save"

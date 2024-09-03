@@ -59,7 +59,7 @@ def main(args, camera_config):
     n_cams = len(set(camera_config["train"]).union(set(camera_config["test"])))
     if args.arch == "base":
         model = DeepAppearanceVAE_IBDCT(
-            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, result_path=args.result_path, save_latent_code=args.save_latent_code, gaussian_noise_covariance_path=args.gaussian_noise_covariance_path
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code, gaussian_noise_covariance_path=args.gaussian_noise_covariance_path
         ).to(device)
     else:
         raise NotImplementedError
@@ -106,7 +106,7 @@ def main(args, camera_config):
         avg_tex = data["avg_tex"].to(device)
         bs, ch, h, w = avg_tex.shape
         dct_block_reorder = model.dct_transform(avg_tex, bs, ch, h, w)
-        expressions_freq_comps.append(dct_block_reorder)
+        expressions_freq_comps.append(dct_block_reorder[:,model.outsourced_freq_list,:,:,:])
 
     val_idx = 0
     model.train()
@@ -114,7 +114,10 @@ def main(args, camera_config):
     model.eval()
     model.to(device)
     begin_time = time.time()
-
+    
+    ##############################
+    # Mount Attack
+    ############################## 
     attack_accuracy = []
     for i, data in tqdm(enumerate(attack_loader)):
         avg_tex = data["avg_tex"].to(device)
@@ -262,6 +265,9 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="Jianming Tong",
+    )
+    parser.add_argument(
+        "--num_freq_comp_outsourced", type=int, default=2, help="number of outsourced component 2,4,6,8,10,12,14"
     )
     parser.add_argument(
         "--save_latent_code",
