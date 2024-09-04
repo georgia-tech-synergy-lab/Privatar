@@ -4,7 +4,7 @@ import os
 data_dir = "/scratch2/multiface/dataset"
 result_path_prefix = "/home/jianming/work/Privatar_prj/testing_results/"
 
-val_batch_size = 20
+val_batch_size = 10
 project_name = f"noisy_test_bdct_hp_ibdct_decoder_0"
 best_model_path = "/home/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_0/best_model.pth"
 result_path = f"{result_path_prefix}{project_name}"

@@ -1,0 +1,36 @@
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+FLOPS of local decoder = 6155.9154020000005, FLOPS of outsourced decoder = 179.44051200000004, transfer data size = 0.196608 MB
+FLOPS of local decoder = 5402.362633999999, FLOPS of outsourced decoder = 264.973824, transfer data size = 0.393216 MB
+FLOPS of local decoder = 4700.195978, FLOPS of outsourced decoder = 401.89324799999997, transfer data size = 0.589824 MB
+FLOPS of local decoder = 4049.4154340000005, FLOPS of outsourced decoder = 590.198784, transfer data size = 0.786432 MB
+FLOPS of local decoder = 3450.021002, FLOPS of outsourced decoder = 829.890432, transfer data size = 0.98304 MB
+FLOPS of local decoder = 2405.3904740000003, FLOPS of outsourced decoder = 1463.4320639999999, transfer data size = 1.376256 MB
+FLOPS of local decoder = 1566.304394, FLOPS of outsourced decoder = 2302.518144, transfer data size = 1.769472 MB

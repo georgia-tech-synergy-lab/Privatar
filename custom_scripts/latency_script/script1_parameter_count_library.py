@@ -6,7 +6,7 @@ import json
 import sys
 import os 
 import glob
-model_arch = "baseline" 
+model_arch = "multiface_partition_bdct4x4_ibdct_hp" 
 # model_arch = "multiface_partition_bdct4x4_nn_decoder" 
 # model_arch = "multiface_partition_bdct4x4_nn_decoder_hp" 
 # model_arch = "multiface_partition_bdct4x4_ibdct"
@@ -115,6 +115,12 @@ for parameter_value in sweep_parameter_list:
 
     if model_arch == "multiface_partition_bdct4x4_nn_decoder_hp":
         model = overallModel(tex_size, mesh_inp_size, n_latent=nlatent, n_cams=n_cams, num_freq_comp_outsourced=parameter_value, result_path="/tmp", save_latent_code=False)
+
+    if model_arch == "multiface_partition_bdct4x4_ibdct":
+        model = overallModel(tex_size, mesh_inp_size, n_latent=nlatent, n_cams=n_cams, result_path="/tmp", save_latent_code=False, gaussian_noise_covariance_path=None)
+
+    if model_arch == "multiface_partition_bdct4x4_ibdct_hp":
+        model = overallModel(tex_size, mesh_inp_size, n_latent=nlatent, n_cams=n_cams, num_freq_comp_outsourced=parameter_value, result_path="/tmp", save_latent_code=False, gaussian_noise_covariance_path=None)
 
     """
         Memory Analysis
@@ -261,6 +267,44 @@ for parameter_value in sweep_parameter_list:
             texture_decoder_outsource_param = texture_decoder_outsource_param + p.numel()
         print(f"texture_decoder_local_param={texture_decoder_local_param}")
         print(f"texture_decoder_outsource_param={texture_decoder_outsource_param}")
+
+    if model_arch == "multiface_partition_bdct4x4_ibdct":
+        for p in model.parameters():
+            parameter_list.append(p.numel())
+        
+        for p in model.enc.parameters():
+            local_enc_parameter_list.append(p.numel())
+        for p in model.dec.parameters():
+            local_dec_parameter_list.append(p.numel())
+        outsource_enc_parameter_list.append(0)
+        outsource_dec_parameter_list.append(0)
+
+    if model_arch == "multiface_partition_bdct4x4_ibdct_hp":
+        for p in model.parameters():
+            parameter_list.append(p.numel())
+        
+        for p in model.enc.parameters():
+            local_enc_parameter_list.append(p.numel())
+        for p in model.dec.texture_decoder_local.parameters():
+            local_dec_parameter_list.append(p.numel())
+        for p in model.dec.view_fc.parameters():
+            local_dec_parameter_list.append(p.numel())
+        for p in model.dec.z_fc.parameters():
+            local_dec_parameter_list.append(p.numel())
+        for p in model.dec.mesh_fc.parameters():
+            local_dec_parameter_list.append(p.numel())
+        for p in model.dec.texture_fc.parameters():
+            local_dec_parameter_list.append(p.numel())
+
+        for p in model.enc_outsourced.parameters():
+            outsource_enc_parameter_list.append(p.numel())
+
+        for p in model.dec.texture_decoder_outsource.parameters():
+            outsource_dec_parameter_list.append(p.numel())
+        for p in model.dec.z_fc_outsource.parameters():
+            outsource_dec_parameter_list.append(p.numel())
+        for p in model.dec.texture_fc_outsource.parameters():
+            outsource_dec_parameter_list.append(p.numel())
 
     print(f"overall parameters = {sum(parameter_list)}")
     print(f"local encoder parameters size = {sum(local_enc_parameter_list)}")

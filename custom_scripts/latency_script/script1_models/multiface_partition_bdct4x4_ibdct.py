@@ -122,7 +122,7 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
         ## Add noise to whole latent code
         if self.apply_gaussian_noise:
             samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.gaussian_noise_covariance, z.shape[0]))
-            samples = samples.to("cuda:0")
+            samples = samples.to(z.device)
             samples = samples.to(z.dtype)
             z = z + samples
         #######################
@@ -134,6 +134,39 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
         if cams is not None:
             pred_tex = self.cc(pred_tex, cams)
         return pred_tex, pred_mesh, kl
+
+    def attack_forward(self, avgtex, mesh, view):
+        b, n, _ = mesh.shape
+        mesh = mesh.view((b, -1))
+
+        bs, ch, h, w = avgtex.shape
+        dct_block_reorder = self.dct_transform(avgtex, bs, ch, h, w)
+
+        mean, logstd = self.enc(dct_block_reorder, mesh)
+        mean = mean * 0.1
+        logstd = logstd * 0.01
+        if self.mode == "vae":
+            std = torch.exp(logstd)
+            eps = torch.randn_like(mean)
+            z = mean + std * eps
+            if self.save_latent_code:
+                torch.save(z, f"{self.latent_code_path}/z_{self.iter}.pth")
+                self.iter = self.iter + 1
+        else:
+            z = torch.cat((mean, logstd), -1)
+
+        #######################
+        ## Add noise to whole latent code
+        if self.apply_gaussian_noise:
+            samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.gaussian_noise_covariance, z.shape[0]))
+            samples = samples.to(z.device)
+            samples = samples.to(z.dtype)
+            z = z + samples
+        #######################
+        
+        pred_tex_comps = self.dec.attack_forward(z, view)
+        return pred_tex_comps
+
 
     def get_mesh_branch_params(self):
         p = self.enc.get_mesh_branch_params() + self.dec.get_mesh_branch_params()
@@ -180,6 +213,14 @@ class DeepAppearanceDecoderLayerRedChnlExpand(nn.Module):
         texture = self.texture_decoder(texture_code)
         mesh = self.mesh_fc(z_code)
         return texture, mesh
+    
+    def attack_forward(self, z, v):
+        view_code = self.relu(self.view_fc(v))
+        z_code = self.relu(self.z_fc(z))
+        feat = torch.cat((view_code, z_code), 1)
+        texture_code = self.relu(self.texture_fc(feat))
+        texture = self.texture_decoder(texture_code)
+        return texture
 
     def get_mesh_branch_params(self):
         return list(self.mesh_fc.parameters())
