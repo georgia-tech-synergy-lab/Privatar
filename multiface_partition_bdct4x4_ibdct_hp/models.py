@@ -16,6 +16,21 @@ from torchjpeg import dct
 freq_per_group = 2
 l2_diff_list = np.array([193010000, 41593896, 26539686, 20498900, 37043116, 25669930, 21078640, 18212020, 23593842, 20278054, 17874242, 16085497, 18370926, 16896158, 15619506, 14439489])
 
+class NN_Attacker(nn.Module):
+    def __init__(
+            self,
+            input_feature,
+            hidden_feature,
+            output_feature
+    ):
+        self.fc1 = nn.Linear(input_feature, hidden_feature)
+        self.fc2 = nn.Linear(hidden_feature, output_feature)
+
+    def forward(self, latent_code):
+        intermediate_tensor = self.fc1(latent_code)
+        return self.fc2(intermediate_tensor)
+
+
 class DeepAppearanceVAE_IBDCT(nn.Module):
     def __init__(
         self,
@@ -209,6 +224,41 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
 
         return pred_tex, pred_mesh, kl_merge
 
+    def train_attack_forward(self, avgtex, mesh, view, cams=None):
+        b, n, _ = mesh.shape
+        mesh = mesh.view((b, -1))
+
+        bs, ch, h, w = avgtex.shape
+        dct_block_reorder = self.dct_transform(avgtex, bs, ch, h, w)
+        dct_block_reorder_outsource = dct_block_reorder[:,self.outsourced_freq_list,:,:,:]
+
+        block_num = h // self.block_size
+        dct_block_reorder_outsource = dct_block_reorder_outsource.reshape(bs, ch*len(self.outsourced_freq_list), block_num, block_num) # into (bs, ch, block_num, block_num, 16)
+    
+        mean_outsource, logstd_outsource = self.enc_outsourced(dct_block_reorder_outsource, mesh)
+        mean_outsource = mean_outsource * 0.1
+        logstd_outsource = logstd_outsource * 0.01
+        if self.mode == "vae":
+            std_outsource = torch.exp(logstd_outsource)
+            eps_outsource = torch.randn_like(mean_outsource)
+            z_outsource = mean_outsource + std_outsource * eps_outsource
+            if self.save_latent_code:
+                torch.save(z_outsource, f"{self.latent_code_path}/z_outsource_{self.iter}.pth")
+                self.iter = self.iter + 1
+        else:
+            z_outsource = torch.cat((mean_outsource, logstd_outsource), -1)
+
+        #######################
+        ## Add noise to whole latent code
+        if self.apply_gaussian_noise:
+            samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.gaussian_noise_covariance, z_outsource.shape[0]))
+            samples = samples.to(z_outsource.device)
+            samples = samples.to(z_outsource.dtype)
+            z_outsource = z_outsource + samples
+        #######################
+
+        return z_outsource
+    
     def attack_forward(self, avgtex, mesh, view, cams=None):
         b, n, _ = mesh.shape
         mesh = mesh.view((b, -1))

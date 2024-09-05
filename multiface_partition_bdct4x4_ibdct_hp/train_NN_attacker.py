@@ -24,11 +24,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from dataset import Dataset
-from models import NN_Attacker
+from models import DeepAppearanceVAE_IBDCT, NN_Attacker
 from torch.utils.data import DataLoader, SequentialSampler
 from utils import Renderer, gammaCorrect
 import wandb
-
 
 wandb_enable = False
 accumulate_channel = True
@@ -47,12 +46,14 @@ def main(args, camera_config):
         args.tex_size,
         camset=camera_config["attack"],
     )
-    attack_sampler = SequentialSampler(dataset_attack)
+    train_sampler = SequentialSampler(dataset_attack)
+
+    assert(args.train_batch_size == 1)
 
     attack_loader = DataLoader(
         dataset_attack,
-        args.val_batch_size,
-        sampler=attack_sampler,
+        args.train_batch_size,
+        sampler=train_sampler,
         num_workers=args.n_worker,
     )
 
@@ -61,8 +62,8 @@ def main(args, camera_config):
 
     n_cams = len(set(camera_config["train"]).union(set(camera_config["test"])))
     if args.arch == "base":
-        model = NN_Attacker(
-            args.input_feature, args.hidden_feature, args.output_feature
+        model = DeepAppearanceVAE_IBDCT(
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code, gaussian_noise_covariance_path=args.gaussian_noise_covariance_path
         ).to(device)
     else:
         raise NotImplementedError
@@ -73,108 +74,91 @@ def main(args, camera_config):
     model.load_state_dict(state_dict)
     model = model.to(device)
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+    mse = nn.MSELoss()
+
+    texmean = cv2.resize(dataset_attack.texmean, (args.tex_size, args.tex_size))
+    texmin = cv2.resize(dataset_attack.texmin, (args.tex_size, args.tex_size))
+    texmax = cv2.resize(dataset_attack.texmax, (args.tex_size, args.tex_size))
+    texmean = torch.tensor(texmean).permute((2, 0, 1))[None, ...].to(device)
+    texmin = torch.tensor(texmin).permute((2, 0, 1))[None, ...].to(device)
+    texmax = torch.tensor(texmax).permute((2, 0, 1))[None, ...].to(device)
+
+    os.makedirs(args.result_path, exist_ok=True)
 
     if wandb_enable:
         wandb_logger = wandb.init(
             config={
-                "input_feature": args.input_feature, 
-                "hidden_feature": args.hidden_feature, 
-                "output_feature": args.output_feature,
+                "tex_size": args.tex_size,
+                "mesh_inp_size": args.mesh_inp_size,
+                "n_latent": args.nlatent,
+                "n_cams": n_cams,
             },
             project=args.project_name,
             entity=args.author_name,
-            name="NN_attacker_training" + args.project_name,
+            name="attack_" + args.project_name,
             group="group0",
             dir=args.result_path,
-            job_type="NN_attack_training",
+            job_type="empirical_attack",
             reinit=True,
         )
+    
+    ##############################
+    # Define NN Attacker
+    ############################## 
+    attacker_model = NN_Attacker(
+            args.input_feature, args.hidden_feature, args.output_feature
+        ).to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.SGD(attacker_model.parameters(), lr=0.001, momentum=0.9)
 
-    val_idx = 0
+    ##############################
+    # Train NN Attacker
+    ############################## 
     model.train()
 
+    model.eval()
     model.to(device)
     begin_time = time.time()
-    for epoch in range(2):  # loop over the dataset multiple times
-
-        running_loss = 0.0
+    for epoch in range(args.epoch):  # loop over the dataset multiple times
+        running_loss = 0
         for i, data in tqdm(enumerate(attack_loader)):
             avg_tex = data["avg_tex"].to(device)
             view = data["view"].to(device)
             verts = data["aligned_verts"].to(device)
 
+            z_outsource = model.train_attack_forward(avg_tex, verts, view)
+            ## calculate the loss between pred_tex_comps and the pre-calculated tex components
             
-
-            inputs, labels = data
-
-            # zero the parameter gradients
-            optimizer.zero_grad()
-
-            # forward + backward + optimize
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
+            outputs = attacker_model(z_outsource)
+            loss = criterion(outputs, torch.tensor(i))
             loss.backward()
             optimizer.step()
-
-            # print statistics
             running_loss += loss.item()
-            if i % 2000 == 1999:    # print every 2000 mini-batches
-                print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
-                running_loss = 0.0
 
-    print('Finished Training')
+            if wandb_enable:
+                wandb_logger.log(
+                    {
+                        "running_loss": running_loss,
+                        "epoch": epoch,
+                    }
+                )
 
-    ##############################
-    # Mount Attack
-    ############################## 
-    attack_accuracy = []
-    for i, data in tqdm(enumerate(attack_loader)):
-        avg_tex = data["avg_tex"].to(device)
-        view = data["view"].to(device)
-        verts = data["aligned_verts"].to(device)
-
-        pred_tex_comps = model.attack_forward(avg_tex, verts, view)
-        ## calculate the loss between pred_tex_comps and the pre-calculated tex components
-        tex_loss_expression_list = torch.zeros(len(expressions_freq_comps))
-
-        for j, expression in enumerate(expressions_freq_comps):
-            try: 
-                tex_loss_expression_list[j] = mse(expression, torch.sum(pred_tex_comps, dim=1))
-            except:
-                print(f"expression.shape={expression.shape}")
-                print(f"pred_tex_comps.shape={pred_tex_comps.shape}")
-                raise Exception("size mismatch")
-        guess_expression_id = torch.argmin(tex_loss_expression_list)
-
-        if guess_expression_id == i:
-            attack_accuracy.append(1)
-        else:
-            attack_accuracy.append(0)
-    
-    attack_accuracy_mean = np.array(attack_accuracy).mean()
-    writer.add_scalar('attack/accuracy_mean', attack_accuracy_mean, val_idx)
-
-    if wandb_enable:
-        wandb_logger.log(
-            {
-                "attack_accuracy_mean": attack_accuracy_mean,
-            }
+        torch.save(
+            attacker_model.state_dict(), os.path.join(args.result_path, f"attacker_model_{epoch}.pth")
         )
 
     end_time = time.time()
-    print("Attack takes %f seconds" % (end_time - begin_time))
+    print("Attacker Training takes %f seconds" % (end_time - begin_time))
     print(
-        "attack_accuracy_mean %f"
-        % (attack_accuracy_mean)
+        "running_loss %f"
+        % (running_loss)
     )
-    return attack_accuracy_mean
+    return running_loss
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument(
-        "--val_batch_size", type=int, default=1, help="Validation batch size"
+        "--train_batch_size", type=int, default=1, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -316,6 +300,14 @@ if __name__ == "__main__":
         default=None, 
         help="path for camera configuration"
     )
+    parser.add_argument(
+        "--epoch",
+        type=int,
+        default=3,
+        help="If loss is x times higher than the previous batch, discard this batch",
+    )
+   
+    
     experiment_args = parser.parse_args()
     print(experiment_args)
 
@@ -349,16 +341,16 @@ if __name__ == "__main__":
 
     camera_set = camera_config["full"]
 
-    attack_accuracy_mean = main(experiment_args, camera_set)
+    running_loss = main(experiment_args, camera_set)
     print(
-        attack_accuracy_mean,
+        running_loss,
     )
     f = open(os.path.join(experiment_args.result_path, "result.txt"), "a")
     f.write("\n")
     f.write(
-        "attack_accuracy_mean %f"
+        "running_loss %f"
         % (
-            attack_accuracy_mean
+            running_loss
         )
     )
     f.close()
