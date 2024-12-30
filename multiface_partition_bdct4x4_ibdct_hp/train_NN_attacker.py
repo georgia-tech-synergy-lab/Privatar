@@ -34,7 +34,7 @@ accumulate_channel = True
 attack_from_high_frequency_channel = True
 
 def main(args, camera_config):
-    device = torch.device("cpu")
+    device = torch.device("cuda:0")
     # device = torch.device("cuda", 0)
 
     print(f"camera config file for {subject_id} exists, loading...")
@@ -109,7 +109,7 @@ def main(args, camera_config):
             args.input_feature, args.hidden_feature, args.output_feature
         ).to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(attacker_model.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(attacker_model.parameters(), lr=args.lr, momentum=args.momentum)
 
     ##############################
     # Train NN Attacker
@@ -130,7 +130,7 @@ def main(args, camera_config):
             ## calculate the loss between pred_tex_comps and the pre-calculated tex components
             
             outputs = attacker_model(z_outsource)
-            loss = criterion(outputs, torch.tensor(i))
+            loss = criterion(outputs, torch.tensor([i]).to(device))
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
@@ -142,7 +142,7 @@ def main(args, camera_config):
                         "epoch": epoch,
                     }
                 )
-
+        print(f"epoch = {epoch}: running_loss = {running_loss}")
         torch.save(
             attacker_model.state_dict(), os.path.join(args.result_path, f"attacker_model_{epoch}.pth")
         )
@@ -306,7 +306,30 @@ if __name__ == "__main__":
         default=3,
         help="If loss is x times higher than the previous batch, discard this batch",
     )
-   
+    parser.add_argument(
+        "--input_feature",
+        type=int,
+        default=256,
+        help="The input feature of the given tensor",
+    )
+    parser.add_argument(
+        "--hidden_feature",
+        type=int,
+        default=128,
+        help="The hidden feature of the given tensor",
+    )
+    parser.add_argument(
+        "--output_feature",
+        type=int,
+        default=65,
+        help="The output feature of the given tensor",
+    )
+    parser.add_argument(
+        "--momentum",
+        type=float,
+        default=0.1,
+        help="The momentum",
+    )
     
     experiment_args = parser.parse_args()
     print(experiment_args)

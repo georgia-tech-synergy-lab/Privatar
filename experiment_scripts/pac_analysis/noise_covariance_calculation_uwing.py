@@ -8,6 +8,8 @@ file_dump_name_suffix = "_ibdct_decoder"
 outsource_freq_list = [2,4,6,8,10,12,14]
 mutual_info_bound_list = [1, 0.1, 0.01]
 
+calculate_dp_noise = True
+
 #########################
 # Path checking.
 if not os.path.exists("./noise_covariance"):
@@ -39,6 +41,8 @@ outsource_branch_noise_covariance_by_freqnum_by_noise = np.zeros((len(outsource_
 # Specify your folder path
 local_branch_l2_norm_latent_code_covariance = []
 outsource_branch_l2_norm_latent_code_covariance = []
+local_branch_trace_latent_code_covariance = []
+outsource_branch_trace_latent_code_covariance = []
 for j, outsource_freq_num in enumerate(outsource_freq_list):
 
     #########################
@@ -84,6 +88,8 @@ for j, outsource_freq_num in enumerate(outsource_freq_list):
 
     print(f"L2 norm of covariance matrix = {np.linalg.norm(covariance_matrix_z)}")
     local_branch_l2_norm_latent_code_covariance.append(np.linalg.norm(covariance_matrix_z))
+    print(f"Trace of covariance matrix = {np.trace(covariance_matrix_z)}")
+    local_branch_trace_latent_code_covariance.append(np.trace(covariance_matrix_z))
     unit_diagonal = np.diag(np.full(covariance_matrix_z.shape[0],-2))
     
     # SVD Decomposition
@@ -99,8 +105,8 @@ for j, outsource_freq_num in enumerate(outsource_freq_list):
         for dim_id in range(noise_s.shape[0]):
             noise_s[dim_id] = s[dim_id] * acc_s / 2 / v
         np.save(f"./noise_covariance/noise_sigma{file_dump_name_suffix}_{outsource_freq_num}_{v}.npy", noise_s)
-        print(f"L2 norm of noise covariance = {np.linalg.norm(noise_s)} when MI = {v}")
-        local_branch_noise_covariance_by_freqnum_by_noise[j,i] = np.linalg.norm(noise_s)
+        print(f"Accumulation of simga_i of noise covariance = {np.sum(noise_s)} when MI = {v}")
+        local_branch_noise_covariance_by_freqnum_by_noise[j,i] = np.sum(noise_s)
 
     ##############################
     # Outsourced Branch
@@ -122,6 +128,8 @@ for j, outsource_freq_num in enumerate(outsource_freq_list):
 
         print(f"L2 norm of covariance matrix = {np.linalg.norm(covariance_matrix_z_outsource)}")
         outsource_branch_l2_norm_latent_code_covariance.append(np.linalg.norm(covariance_matrix_z_outsource))
+        print(f"trace of covariance matrix = {np.trace(covariance_matrix_z_outsource)}")
+        outsource_branch_trace_latent_code_covariance.append(np.trace(covariance_matrix_z_outsource))
         u_outsource, s_outsource, u_t_outsource = np.linalg.svd(covariance_matrix_z_outsource)
         np.save(f"./svd/u_outsource{file_dump_name_suffix}_{outsource_freq_num}.npy", u_outsource)
         np.save(f"./svd/s_outsource{file_dump_name_suffix}_{outsource_freq_num}.npy", s_outsource)
@@ -134,11 +142,17 @@ for j, outsource_freq_num in enumerate(outsource_freq_list):
             for dim_id in range(noise_s_outsource.shape[0]):
                 noise_s_outsource[dim_id] = s_outsource[dim_id] * acc_s_outsource / 2 / v
             np.save(f"./noise_covariance/noise_sigma_outsource{file_dump_name_suffix}_{outsource_freq_num}_{v}.npy", noise_s_outsource)
-            print(f"L2 norm of outsourced noise covariance = {np.linalg.norm(noise_s_outsource)} when MI = {v}")
-            outsource_branch_noise_covariance_by_freqnum_by_noise[j,i] = np.linalg.norm(noise_s_outsource)
+            print(f"Accumulation of simga_i of outsourced noise covariance = {np.sum(noise_s_outsource)} when MI = {v}")
+            if calculate_dp_noise:
+                dp_isotropic_noise = np.ones_like(noise_s_outsource)*np.max(noise_s_outsource)
+                print(f"Accumulation of simga_i of outsourced noise -- DP/PAC ={np.sum(dp_isotropic_noise)}/{np.sum(noise_s_outsource)} = {np.sum(dp_isotropic_noise)/np.sum(noise_s_outsource)} when MI = {v}")
+            outsource_branch_noise_covariance_by_freqnum_by_noise[j,i] = np.sum(noise_s_outsource)
 
 print(f"local l2 norm of covariance for local latent code matrix")
 print(local_branch_l2_norm_latent_code_covariance)
+
+print(f"trace of covariance of local latent code matrix")
+print(local_branch_trace_latent_code_covariance)
 
 print(f"local noise covariance (vertical -- diff. freq. component; horizontal -- diff. mutual information)")
 for j in range(len(outsource_freq_list)):
@@ -149,6 +163,8 @@ for j in range(len(outsource_freq_list)):
 print(f"outsourced l2 norm of covariance for outsourced latent code matrix")
 print(outsource_branch_l2_norm_latent_code_covariance)
 
+print(f"outsourced trace of covariance for outsourced latent code matrix")
+print(outsource_branch_trace_latent_code_covariance)
 print(f"outsourced noise covariance (vertical -- diff. freq. component; horizontal -- diff. mutual information)")
 for j in range(len(outsource_freq_list)):
     for i in range(len(mutual_info_bound_list)):

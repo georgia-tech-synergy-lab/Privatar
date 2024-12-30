@@ -1,9 +1,9 @@
 import os
 
 # Please select one path out of the following three paths based on the server
-path_prefix_god2 = "/home/jianming/work/multiface/"
+path_prefix_RTX3090 = "/home/jianming/work/multiface/"
 path_prefix_synergy3 = "/home/jianming/work/Privatar_prj/training_results/"
-path_prefix_uwing2 = "/workspace/uwing2/multiface/"
+path_prefix_GH200 = "/workspace/uwing2/multiface/"
 
 # Please select one path out of the following three paths based on the server
 #######

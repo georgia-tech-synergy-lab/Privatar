@@ -23,12 +23,17 @@ class NN_Attacker(nn.Module):
             hidden_feature,
             output_feature
     ):
+        super(NN_Attacker, self).__init__()
+        
         self.fc1 = nn.Linear(input_feature, hidden_feature)
-        self.fc2 = nn.Linear(hidden_feature, output_feature)
+        self.fc2 = nn.Linear(hidden_feature, hidden_feature)
+        self.fc3 = nn.Linear(hidden_feature, output_feature)
+        self.relu = nn.ReLU()
 
     def forward(self, latent_code):
-        intermediate_tensor = self.fc1(latent_code)
-        return self.fc2(intermediate_tensor)
+        x = self.relu(self.fc1(latent_code))
+        x = self.relu(self.fc2(x))
+        return self.fc3(x)
 
 
 class DeepAppearanceVAE_IBDCT(nn.Module):
