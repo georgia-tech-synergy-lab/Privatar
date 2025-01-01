@@ -4,6 +4,9 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # User-specific files
+__pycache__
+
+pretrain_model
 training_results
 testing_results
 *.rsuser
@@ -14,10 +17,7 @@ testing_results
 dataset
 minidataset
 output
-pretrained_model
 test_results
-testing_results
-training_results
 training_results_0_2
 visual_results
 visual
@@ -32,6 +32,7 @@ captured_distribution_3
 captured_distribution_4
 captured_distribution_5
 captured_intermediate
+torchjpeg
 profiled_latent_code
 *.pdf
 *.pth
