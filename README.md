@@ -22,7 +22,7 @@ We list two flows to install, run and test Privatar because different environmen
 
 ## Step 1: Setup GPU Docker
 -  For typical desktop-class GPU such as RTX 3090, we recommend using the conda virtual environment.
-```
+```bash
 conda create -n <your_favoriate_name> python=3.7
 conda activate <your_favoriate_name>
 ```
@@ -32,13 +32,13 @@ We recommand using NVIDIA built-in docker.
 
 Command 1: Download the docker.
 If you have Docker 19.03 or later, a typical command to launch the container is:
-```
+```bash
 docker run --gpus all -it --rm nvcr.io/nvidia/pytorch:xx.xx-py3
 ```
 Note: our experiments base on nvcr.io/nvidia/pytorch:24.01-py3
 
 Command 2: Launch the docker.
-```
+```bash
 docker run --gpus all -it --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 --memory 51200m  --rm <docker_name>
 ```
 where <docker_name> refers to the name of your downloaded docker "nvcr.io/nvidia/pytorch:xx.xx-py3"
@@ -61,7 +61,7 @@ Note: we use "wandb" to track the training, testing progress and record the fina
 By default, wandb is turned off, u could change `wandb_enable` from each training/testing script to enable wandb.
 
 - Download and install NVDiffrast
-```
+```bash
 cd <path_to_privatar>
 git clone https://github.com/NVlabs/nvdiffrast
 cd nvdiffrast
@@ -69,7 +69,7 @@ python3 setup.py install
 ```
 
 - Download and install torchjpeg
-```
+```bash
 git clone https://github.com/Queuecumber/torchjpeg
 cd torchjpeg
 pip3 setup.py install
@@ -77,7 +77,7 @@ pip3 setup.py install
 We don't recommend installing torchjpeg using pip3 install because it might break other dependencies.
 
 ## Step 3: Download Datasets
-```
+```bash
 cd <path_to_privatar>
 python3 ./multiface/download_dataset.py --dest "<path_to_Privatar>/dataset" --download_config "./mini_download_config.json"
 ```
@@ -85,7 +85,7 @@ python3 ./multiface/download_dataset.py --dest "<path_to_Privatar>/dataset" --do
 ## Step 4: Download pretrained model
 The pretrained weights for different users in the provided datasets are collected at this [facial_pretrained_datasets](https://github.com/facebookresearch/multiface/blob/main/documentation/INSTALLATION.md). We use 6795937 base model as the evaluation target. Other structure would work as well. The link for the pretrained model weights of 6795937 is [6795937_base](https://fb-baas-f32eacb9-8abb-11eb-b2b8-4857dd089e15.s3.amazonaws.com/MugsyDataRelease/PretrainedModel/6795937--GHS-base_nosl/best_model.pth)
 
-```
+```bash
 cd <path_to_privatar>
 mkdir pretrain_model
 wget https://fb-baas-f32eacb9-8abb-11eb-b2b8-4857dd089e15.s3.amazonaws.com/MugsyDataRelease/PretrainedModel/6795937--GHS-base_nosl/best_model.pth -O 6795937_best_model.pth
@@ -94,39 +94,39 @@ wget https://fb-baas-f32eacb9-8abb-11eb-b2b8-4857dd089e15.s3.amazonaws.com/Mugsy
 # Ready to run?
 ## Step 1: Training
 - Original: multiface baseline using the pretrained model weights
-```
+```bash
 cd <path_to_privatar>/multiface
 python3 launch_train_job_serial_GH200.py
 ```
 
 - Design Choice 1: directly split mesh and unwrapped texture into two separate path (outsource entire unwrapped texture)
-```
+```bash
 cd <path_to_privatar>/multiface_direct_split
 python3 launch_train_job_serial_GH200.py
 ```
 
 - Design Choice 2: quantize model to be low precision
-```
+```bash
 cd <path_to_privatar>/multiface_quantization
 python3 launch_train_job_serial_GH200.py
 ```
 
 - Design Choice 3: prune channels from the decoder to reduce the local computation
-```
+```bash
 cd <path_to_privatar>/multiface_sparse
 python3 launch_train_job_serial_GH200.py
 ```
 
 - Design Choice 4: decompose "unwrapped texture" into 16 frequency components, but keep all of them run local.
 This requires training to be completed.
-```
+```bash
 cd <path_to_privatar>/multiface_partition_bdct4x4_ibdct
 python3 launch_train_job_serial_GH200.py
 ```
 
 - Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components outsourcing. The number of frequency components are controlled by ```num_freq_comp_outsourced```.
 This requires training to be completed.
-```
+```bash
 cd <path_to_privatar>/multiface_partition_bdct4x4_ibdct_hp
 python3 launch_train_job_serial_GH200.py
 ```
@@ -137,39 +137,39 @@ Note: all training results locate at the ```<path_to_privatar>/training_results`
 
 ## Step 2: Testing
 - Original: multiface baseline using the pretrained model weights
-```
+```bash
 cd <path_to_privatar>/multiface
 python3 launch_test_job_serial_GH200.py
 ```
 
 - Design Choice 1: directly split mesh and unwrapped texture into two separate path (outsource entire unwrapped texture)
-```
+```bash
 cd <path_to_privatar>/multiface_direct_split
 python3 launch_test_job_serial_GH200.py
 ```
 
 - Design Choice 2: quantize model to be low precision
-```
+```bash
 cd <path_to_privatar>/multiface_quantization
 python3 launch_test_job_serial_GH200.py
 ```
 
 - Design Choice 3: prune channels from the decoder to reduce the local computation
-```
+```bash
 cd <path_to_privatar>/multiface_sparse
 python3 launch_test_job_serial_GH200.py
 ```
 
 - Design Choice 4: decompose "unwrapped texture" into 16 frequency components, but keep all of them run local.
 This requires training to be completed.
-```
+```bash
 cd <path_to_privatar>/multiface_partition_bdct4x4_ibdct
 python3 launch_test_job_serial_GH200.py
 ```
 
 - Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components outsourcing. The number of frequency components are controlled by ```num_freq_comp_outsourced```.
 This requires training to be completed.
-```
+```bash
 cd <path_to_privatar>/multiface_partition_bdct4x4_ibdct_hp
 python3 launch_test_job_serial_GH200.py
 ```
@@ -193,7 +193,7 @@ Differential Privacy (DP) noise calculation follows [paper](https://arxiv.org/pd
 DP requires the prior knowledge of the L2 norm of all outsourced latent codes.
 Detailed procedures are written as the comments in the code.
 
-```
+```bash
 python3 <path_to_privatar>/Privatar/experiment_scripts/dp_analysis/dp_noise_generation.py
 ```
 Detailed procedures in calculating DP noise are detailed in the function `dp_noise_calculation`.
@@ -205,7 +205,7 @@ After this script, the generated noise will show up in the path
 Noise calculation following PAC privacy requires the prior knowledge of the L2 norm of **the covariance** of all outsourced latent codes.
 So that PAC privacy could leverage the dimensional differences to generate non-uniform noise for minimizing the overall noise intensity.
 
-```
+```bash
 python3 <path_to_privatar>/Privatar/experiment_scripts/pac_analysis/pac_noise_covariance_calculation_GH200.py
 ```
 After this script, the generated noise will show up in the path 
@@ -218,7 +218,7 @@ of noisy inference! Specifically, in horizontally partitioned avatar reconstruct
 flow, generated noise is only injected to the outsourced latent codes.
 
 Noisy inference
-```
+```bash
 cd <path_to_privatar>/multiface_partition_bdct4x4_ibdct_hp
 python3 launch_noisy_test_job_serial_GH200.py
 ```
@@ -236,7 +236,7 @@ We provide three different ways of generating reference components, under all of
 
 Specify the configuration of ```accumulate_channel``` and ```attack_from_high_frequency_channel```, then run the following script to launch attack.
 
-```
+```bash
 python3 launch_empirical_attack_GH200.py
 ```
 
@@ -257,13 +257,13 @@ For each configuration, all frequency components will be written to the folder `
 To help understand the covariance of different frequency components under differnet datasets, we provide the script to perform running profiling of all decomposed frequency components under designated datasets. 
 
 To run it,
-```
+```bash
 cd <path_to_privatar>/multiface_partition_bdct4x4_ibdct
 python3 launch_l2norm_freq_cov_analysis_GH200.py
 ```
 
 It will shows results like following
-```
+```bash
 trace of covariance = 11308.309006199575 for freq component = 0
 trace of covariance = 199.41605765586263 for freq component = 1
 trace of covariance = 77.53071010274161 for freq component = 2
