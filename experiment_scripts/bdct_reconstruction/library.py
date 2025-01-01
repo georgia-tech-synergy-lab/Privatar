@@ -23,11 +23,30 @@ from dataset import Dataset
 from PIL import Image, ImageFile
 from torch.utils.data import DataLoader, SequentialSampler
 
+
+"""
+    Data Set Loading
+"""
+# Please change the following
+tex_size = 1024
+val_batch_size = 1
+n_worker = 1
+project_name = "bdct_4x4_reconstruction"
+path_to_privatar = "/workspace/uwing2/Privatar"
+data_dir = f"{path_to_privatar}/dataset/m--20180227--0000--6795937--GHS" 
+krt_dir = f"{path_to_privatar}/dataset/m--20180227--0000--6795937--GHS/KRT"
+camera_configs_path = f"{path_to_privatar}/experiment_scripts/empirical_attack/attack-camera-split-config_6795937.json"
+framelist_train = f"{path_to_privatar}/experiment_scripts/empirical_attack/selected_expression_frame_list.txt"
+subject_id = data_dir.split("--")[-2]
+camera_config_path = f"{path_to_privatar}/multiface/camera_configs/camera-split-config_{subject_id}.json"
+result_path = f"{path_to_privatar}/testing_results/{project_name}"
+attack_camera_config_path = f"{path_to_privatar}/experiment_scripts/empirical_attack/attack-camera-split-config_{subject_id}.json"
+
 block_size = 4
 total_frequency_components = block_size * block_size
 check_reconstruct_img = True
 save_block_img_to_drive = False
-load_attack_dataset = False
+load_attack_dataset = True
 load_test_dataset = True
 
 def load_image(image_path):
@@ -360,21 +379,6 @@ def test_img_dct_transform_nn_connect(x, bs, ch, h, w):
 
 
 
-"""
-    Data Set Loading
-"""
-
-tex_size = 1024
-val_batch_size = 1
-n_worker = 1
-path_prefix = "/home/jianming/work/multiface/"
-data_dir = f"/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS"
-krt_dir = f"/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT"
-# framelist_train = f"/home/jianming/work/Privatar_prj/custom_scripts/bdct_reconstruction/single_expression_frame_list.txt"
-framelist_train = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/selected_expression_frame_list.txt"
-subject_id = data_dir.split("--")[-2]
-camera_config_path = f"{path_prefix}camera_configs/camera-split-config_{subject_id}.json"
-result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
 
 
 if os.path.exists(camera_config_path):
@@ -441,8 +445,6 @@ if load_test_dataset:
 
 ## Generate Data Pair -- for empirical attack setup
 if load_attack_dataset:
-    attack_camera_config_path = f"/home/jianming/work/Privatar_prj/experiment_scripts/empirical_attack/attack-camera-split-config_{subject_id}.json"
-    result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
 
     print(f"camera config file for {subject_id} exists, loading...")
     f = open(attack_camera_config_path, "r")

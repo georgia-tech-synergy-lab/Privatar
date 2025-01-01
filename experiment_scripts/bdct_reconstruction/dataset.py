@@ -97,7 +97,7 @@ class Dataset(torch.utils.data.Dataset):
         check_path(self.meshpath)
         check_path(framelistpath)
 
-        framelist = np.genfromtxt(framelistpath, dtype=np.str)
+        framelist = np.genfromtxt(framelistpath, dtype=str)
         print(framelist)
         self.mesh_topology = None
 

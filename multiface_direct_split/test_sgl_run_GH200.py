@@ -57,7 +57,7 @@ def main(args, camera_config, test_segment):
     n_cams = len(set(camera_config["train"]).union(set(dataset_test.cameras)))
     if args.arch == "base":
         model = DeepAppearanceVAEDirectSplit(
-            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams
+            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, result_path=args.result_path, save_latent_code=args.save_latent_code, gaussian_noise_covariance_path=args.gaussian_noise_covariance_path
         ).to(device)
     else:
         raise NotImplementedError

@@ -11,7 +11,7 @@ best_model_path = f"/home/jianming/work/Privatar_prj/training_results/bdct_hp_ib
 result_path = f"{result_path_prefix}{project_name}"
 framelist_test = "/home/jianming/work/Privatar_prj/experiment_scripts/empirical_attack/selected_expression_frame_list.txt"
 camera_configs_path = "/home/jianming/work/Privatar_prj/experiment_scripts/empirical_attack/attack-camera-split-config_6795937.json"
-
+wandb_author_name = "jimmytong"
 
 print(f'python analyse_run.py --data_dir {data_dir}/dataset/m--20180227--0000--6795937--GHS --krt_dir {data_dir}/dataset/m--20180227--0000--6795937--GHS/KRT --framelist_test {framelist_test}  --result_path {result_path} --test_segment "./test_segment.json" --lambda_screen 1 --model_path {best_model_path}  --arch base  --project_name {project_name} --author_name {wandb_author_name} --val_batch_size {val_batch_size} --camera_configs_path {camera_configs_path}')
-os.system(f'python analyse_run.py --data_dir {data_dir}/dataset/m--20180227--0000--6795937--GHS --krt_dir {data_dir}/dataset/m--20180227--0000--6795937--GHS/KRT --framelist_test {framelist_test}  --result_path {result_path} --test_segment "./test_segment.json" --lambda_screen 1 --model_path {best_model_path}  --arch base  --project_name {project_name} --author_name jimmytong  --num_freq_comp_outsourced {num_freq_comp_outsourced} --val_batch_size {val_batch_size} --camera_configs_path {camera_configs_path}')
+os.system(f'python analyse_run.py --data_dir {data_dir}/dataset/m--20180227--0000--6795937--GHS --krt_dir {data_dir}/dataset/m--20180227--0000--6795937--GHS/KRT --framelist_test {framelist_test}  --result_path {result_path} --test_segment "./test_segment.json" --lambda_screen 1 --model_path {best_model_path}  --arch base  --project_name {project_name} --author_name {wandb_author_name}  --num_freq_comp_outsourced {num_freq_comp_outsourced} --val_batch_size {val_batch_size} --camera_configs_path {camera_configs_path}')

@@ -6,7 +6,7 @@ posterious_successful_rate_list = [0.4, 0.09]
 prior_successful_rate = 1/56
 dimensionality = 256
 
-def main():
+def dp_noise_calculation():
   """
   [1] https://arxiv.org/pdf/1702.07476**
 
@@ -47,7 +47,7 @@ def main():
   return result_sigma_list
 
 if __name__ == "__main__":
-  result_sigma_list = main()
+  result_sigma_list = dp_noise_calculation()
   for i, psr in enumerate(posterious_successful_rate_list):
     print(f"L2 norm = {math.sqrt(result_sigma_list[i])*dimensionality}, minimal sigma = {math.sqrt(result_sigma_list[i])} for Posterious Successful Rate = {psr}")
     # print(f"L2 norm = {result_sigma_list[i]*dimensionality}, minimal sigma^2 = {result_sigma_list[i]} for Posterious Successful Rate = {psr}")

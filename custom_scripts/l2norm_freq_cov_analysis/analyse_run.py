@@ -27,179 +27,91 @@ from dataset import Dataset
 from models import DeepAppearanceVAE_IBDCT
 from torch.utils.data import DataLoader, SequentialSampler
 from utils import Renderer, gammaCorrect
+from torchjpeg import dct
 import wandb
 
 wandb_enable = False
-accumulate_channel = False
-attack_from_high_frequency_channel = False
+accumulate_channel = True
+attack_from_high_frequency_channel = True
+total_frequency_component = 16
+block_size = 4
+
+def downsample_tensor(input_tensor, scale_factor=1/8):
+    """
+    Downsample the input tensor to 1/8 of its height and width.
+    
+    Parameters:
+    input_tensor (torch.Tensor): The input tensor to downsample. The last two dimensions should be height and width.
+    scale_factor (float): The factor by which to downsample the height and width (default is 1/8).
+
+    Returns:
+    torch.Tensor: The downsampled tensor.
+    """
+    # Ensure the input tensor has at least 4 dimensions (e.g., batch size, channels, height, width)
+    if input_tensor.dim() < 4:
+        raise ValueError("Input tensor must have at least 4 dimensions (e.g., batch size, channels, height, width).")
+    
+    # Downsample using interpolate with 'bilinear' mode (or choose another mode as needed)
+    downsampled_tensor = F.interpolate(input_tensor, scale_factor=scale_factor, mode='bilinear', align_corners=False)
+    
+    return downsampled_tensor
+
+def img_reorder_pure_bdct(x, bs, ch, h, w):
+    x = x.view(bs * ch, 1, h, w)
+    x = F.unfold(x, kernel_size=(block_size, block_size), dilation=1, padding=0, stride=(block_size, block_size))
+    x = x.transpose(1, 2)
+    x = x.view(bs, ch, -1, block_size, block_size)
+    return x
+
+## Image frequency cosine transform
+def dct_transform(x, bs, ch, h, w):
+    rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
+    block_num = h // block_size
+    dct_block = dct.block_dct(rerodered_img) #BDCT
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3).reshape(bs, ch*total_frequency_component, block_num, block_num)
+    return dct_block_reorder
 
 def main(args, camera_config):
     device = torch.device("cpu")
-    # device = torch.device("cuda", 0)
 
     print(f"camera config file for {subject_id} exists, loading...")
 
-    dataset_attack = Dataset(
+    dataset_test = Dataset(
         args.data_dir,
         args.krt_dir,
         args.framelist_test,
         args.tex_size,
-        camset=camera_config["attack"],
+        camset=camera_config["test"],
     )
-    attack_sampler = SequentialSampler(dataset_attack)
+    test_sampler = SequentialSampler(dataset_test)
 
-    attack_loader = DataLoader(
-        dataset_attack,
+    test_loader = DataLoader(
+        dataset_test,
         args.val_batch_size,
-        sampler=attack_sampler,
+        sampler=test_sampler,
         num_workers=args.n_worker,
     )
 
-    print("#attack expression list", len(dataset_attack))
-    writer = SummaryWriter(log_dir=args.result_path)
-
-    n_cams = len(set(camera_config["train"]).union(set(camera_config["test"])))
-    if args.arch == "base":
-        model = DeepAppearanceVAE_IBDCT(
-            args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams, num_freq_comp_outsourced=args.num_freq_comp_outsourced, result_path=args.result_path, save_latent_code=args.save_latent_code, gaussian_noise_covariance_path=args.gaussian_noise_covariance_path
-        ).to(device)
-    else:
-        raise NotImplementedError
-
-    # by default load the best_model.pth
-    print("loading model from", args.model_path)
-    state_dict = torch.load(args.model_path, map_location=device)
-    model.load_state_dict(state_dict)
-    model = model.to(device)
-
-    mse = nn.MSELoss()
-
-    texmean = cv2.resize(dataset_attack.texmean, (args.tex_size, args.tex_size))
-    texmin = cv2.resize(dataset_attack.texmin, (args.tex_size, args.tex_size))
-    texmax = cv2.resize(dataset_attack.texmax, (args.tex_size, args.tex_size))
-    texmean = torch.tensor(texmean).permute((2, 0, 1))[None, ...].to(device)
-    texmin = torch.tensor(texmin).permute((2, 0, 1))[None, ...].to(device)
-    texmax = torch.tensor(texmax).permute((2, 0, 1))[None, ...].to(device)
-
-    os.makedirs(args.result_path, exist_ok=True)
-
-    if wandb_enable:
-        wandb_logger = wandb.init(
-            config={
-                "tex_size": args.tex_size,
-                "mesh_inp_size": args.mesh_inp_size,
-                "n_latent": args.nlatent,
-                "n_cams": n_cams,
-            },
-            project=args.project_name,
-            entity=args.author_name,
-            name="attack_" + args.project_name,
-            group="group0",
-            dir=args.result_path,
-            job_type="empirical_attack",
-            reinit=True,
-        )
-
     ##############################
-    # Collect the various frequency components of unwrapped texture
+    # Collect the various frequency components of various 
     ############################## 
     # version 1: following the reconstruction pipeline
-    expressions_freq_comps = []
-    if not accumulate_channel:
-        for i, data in tqdm(enumerate(attack_loader)):
-            avg_tex = data["avg_tex"].to(device)
-            bs, ch, h, w = avg_tex.shape
-            block_num = h // model.block_size
-            dct_block_reorder = model.dct_transform(avg_tex, bs, ch, h, w)
-            dct_block_reorder = dct_block_reorder.reshape(bs, ch*model.total_frequency_component, block_num, block_num)
+    freq_tensor_list = []
+    for i in range(total_frequency_component):
+        freq_tensor_list.append(torch.zeros(len(test_loader), 32*32*3))
 
-            projected_outsourced_freq_comp = torch.zeros((bs, model.outsourced_channel_ratio*ch, block_num, block_num))
-            overall_channel = model.outsourced_channel_ratio - 1
-            # Fill in each component group value
-            for index, freq_pair in enumerate(model.sorted_index_array):
-                if model.normalize_list[freq_pair[0]] + model.normalize_list[freq_pair[1]] < 2:
-                    # merge two into one.
-                    projected_outsourced_freq_comp[0,overall_channel*ch:(overall_channel+1)*ch,:,:] = dct_block_reorder[0,ch*freq_pair[0]:ch*(freq_pair[0]+1),:,:] + dct_block_reorder[0,ch*freq_pair[1]:ch*(freq_pair[1]+1),:,:]
-                    overall_channel = overall_channel - 1
-                else:
-                    projected_outsourced_freq_comp[0,overall_channel*ch:(overall_channel+1)*ch,:,:] = dct_block_reorder[0,ch*freq_pair[0]:ch*(freq_pair[0]+1),:,:]
-                    overall_channel = overall_channel - 1
-                    projected_outsourced_freq_comp[0,overall_channel*ch:(overall_channel+1)*ch,:,:] = dct_block_reorder[0,ch*freq_pair[1]:ch*(freq_pair[1]+1),:,:]
-                    overall_channel = overall_channel - 1
-            expressions_freq_comps.append(projected_outsourced_freq_comp)
-    # version 2: only reconstruct higher frequency components
-    elif attack_from_high_frequency_channel:
-        for i, data in tqdm(enumerate(attack_loader)):
-            avg_tex = data["avg_tex"].to(device)
-            bs, ch, h, w = avg_tex.shape
-            block_num = h // model.block_size
-            dct_block_reorder = model.dct_transform(avg_tex, bs, ch, h, w)
-            dct_block_reorder = dct_block_reorder[:, model.total_frequency_component-len(model.outsourced_freq_list):model.total_frequency_component, :, :, :].reshape(bs, ch*len(model.outsourced_freq_list), block_num, block_num)
-
-            expressions_freq_comps.append(torch.sum(dct_block_reorder, dim=1))    
-        pass
-    # version 3: accumulate all frequency components into an aggregated synthesized component
-    else:
-        for i, data in tqdm(enumerate(attack_loader)):
-            avg_tex = data["avg_tex"].to(device)
-            bs, ch, h, w = avg_tex.shape
-            block_num = h // model.block_size
-            dct_block_reorder = model.dct_transform(avg_tex, bs, ch, h, w)
-            dct_block_reorder = dct_block_reorder[:, model.outsourced_freq_list, :, :, :].reshape(bs, ch*len(model.outsourced_freq_list), block_num, block_num)
-
-            expressions_freq_comps.append(torch.sum(dct_block_reorder, dim=1))    
-
-    val_idx = 0
-    model.train()
-
-    model.eval()
-    model.to(device)
-    begin_time = time.time()
-    
-    ##############################
-    # Mount Attack
-    ############################## 
-    attack_accuracy = []
-    for i, data in tqdm(enumerate(attack_loader)):
+    overall_freq_decomposition = []
+    for i, data in tqdm(enumerate(test_loader)):
         avg_tex = data["avg_tex"].to(device)
-        view = data["view"].to(device)
-        verts = data["aligned_verts"].to(device)
+        bs, ch, h, w = avg_tex.shape
+        block_num = h // block_size
+        dct_block_reorder = dct_transform(avg_tex, bs, ch, h, w)
+        downsampled_blocks = downsample_tensor(dct_block_reorder)
+        for j in range(total_frequency_component):
+            freq_tensor_list[j][i,:] = downsampled_blocks[:, j*ch:(j+1)*ch, :, :].flatten()
 
-        pred_tex_comps = model.attack_forward(avg_tex, verts, view)
-        ## calculate the loss between pred_tex_comps and the pre-calculated tex components
-        tex_loss_expression_list = torch.zeros(len(expressions_freq_comps))
-
-        for j, expression in enumerate(expressions_freq_comps):
-            try: 
-                tex_loss_expression_list[j] = mse(expression, torch.sum(pred_tex_comps, dim=1))
-            except:
-                print(f"expression.shape={expression.shape}")
-                print(f"pred_tex_comps.shape={pred_tex_comps.shape}")
-                raise Exception("size mismatch")
-        guess_expression_id = torch.argmin(tex_loss_expression_list)
-
-        if guess_expression_id == i:
-            attack_accuracy.append(1)
-        else:
-            attack_accuracy.append(0)
-    
-    attack_accuracy_mean = np.array(attack_accuracy).mean()
-    writer.add_scalar('attack/accuracy_mean', attack_accuracy_mean, val_idx)
-
-    if wandb_enable:
-        wandb_logger.log(
-            {
-                "attack_accuracy_mean": attack_accuracy_mean,
-            }
-        )
-
-    end_time = time.time()
-    print("Attack takes %f seconds" % (end_time - begin_time))
-    print(
-        "attack_accuracy_mean %f"
-        % (attack_accuracy_mean)
-    )
-    return attack_accuracy_mean
+    for j in range(total_frequency_component):
+        print(f"trace of covariance = {np.trace(np.cov(freq_tensor_list[j]))} for freq component = {j}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")

@@ -5,6 +5,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
+import os
 from os import wait
 
 import numpy as np
@@ -89,6 +90,9 @@ class DeepAppearanceVAE(nn.Module):
         )
         self.cc = ColorCorrection(n_cams)
 
+        self.iter = 0
+
+
     def forward(self, avgtex, mesh, view, cams=None):
         b, n, _ = mesh.shape
         mesh = mesh.view((b, -1))
@@ -140,6 +144,9 @@ class DeepAppearanceVAEDirectSplit(nn.Module):
         res=False,
         non=False,
         bilinear=False,
+        result_path="",
+        save_latent_code=False,
+        gaussian_noise_covariance_path=None
     ):
         super(DeepAppearanceVAEDirectSplit, self).__init__()
         z_dim = n_latent if mode == "vae" else n_latent * 2
@@ -152,6 +159,22 @@ class DeepAppearanceVAEDirectSplit(nn.Module):
         )
         self.cc = ColorCorrection(n_cams)
 
+        self.save_latent_code = save_latent_code
+        self.latent_code_path = f"{result_path}/latent_code"
+        if self.save_latent_code:
+            if not os.path.exists(self.latent_code_path):
+                os.makedirs(self.latent_code_path)
+        self.iter = 0
+
+        if gaussian_noise_covariance_path is not None:
+            self.gaussian_noise_covariance = np.diag(np.load(gaussian_noise_covariance_path))
+            self.mean = np.zeros(self.gaussian_noise_covariance.shape[0]) 
+            self.apply_gaussian_noise = True
+        else:
+            self.gaussian_noise_covariance = None
+            self.mean = None
+            self.apply_gaussian_noise = False
+        
     def forward(self, avgtex, mesh, view, cams=None):
         b, n, _ = mesh.shape
         mesh = mesh.view((b, -1))
@@ -175,6 +198,19 @@ class DeepAppearanceVAEDirectSplit(nn.Module):
         else:
             z_texture = torch.cat((mean_texture, logstd_texture), -1)
             kl_texture = torch.tensor(0).to(z_texture.device)
+
+        if self.save_latent_code:
+            torch.save(z_texture, f"{self.latent_code_path}/z_outsource_{self.iter}.pth")
+            self.iter = self.iter + 1
+        
+        #######################
+        ## Add noise to whole latent code
+        if self.apply_gaussian_noise:
+            samples = torch.from_numpy(np.random.multivariate_normal(self.mean, self.gaussian_noise_covariance, z_texture.shape[0]))
+            samples = samples.to(z_texture.device)
+            samples = samples.to(z_texture.dtype)
+            z_texture = z_texture + samples
+        #######################
 
         pred_tex, pred_mesh = self.dec(z_mesh, z_texture, view)
         pred_mesh = pred_mesh.view((b, n, 3))
