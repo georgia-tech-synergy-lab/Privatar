@@ -5,7 +5,7 @@
 # What's Privatar?
 Privatar is the first that leverages both local and untrusted cloud to concurrently achieve privacy-preserving multi-user avatar reconstruction. The entire post-split flow is illustrated as the figure below.
 
-<img src="./figure/setup.png" width="1400">
+<img src="figure/setup.png" width="1400">
 
 
 
