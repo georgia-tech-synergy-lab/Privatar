@@ -1,6 +1,6 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-# 
+#
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
@@ -42,7 +42,7 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
         n_blocks = 4
         self.block_size = n_blocks
         self.total_frequency_component = self.block_size * self.block_size
-        
+
         self.save_latent_code = save_latent_code
         self.latent_code_path = f"{result_path}/latent_code"
         if self.save_latent_code:
@@ -52,7 +52,7 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
 
         if gaussian_noise_covariance_path is not None:
             self.gaussian_noise_covariance = np.diag(np.load(gaussian_noise_covariance_path))
-            self.mean = np.zeros(self.gaussian_noise_covariance.shape[0]) 
+            self.mean = np.zeros(self.gaussian_noise_covariance.shape[0])
             self.apply_gaussian_noise = True
         else:
             self.gaussian_noise_covariance = None
@@ -79,7 +79,7 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
         # x = dct.to_rgb(x)#.squeeze(0)
         # x = (x / 255.0) * 2 - 1
         return x
-    
+
     ## Image frequency cosine transform
     def dct_transform(self, x, bs, ch, h, w):
         rerodered_img = self.img_reorder_pure_bdct(x, bs, ch, h, w)
@@ -126,7 +126,7 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
             samples = samples.to(z.dtype)
             z = z + samples
         #######################
-            
+
         pred_tex_comps, pred_mesh = self.dec(z, view)
         pred_tex = self.dct_inverse_transform(pred_tex_comps, bs, ch, h, w)
 
@@ -163,7 +163,7 @@ class DeepAppearanceVAE_IBDCT(nn.Module):
             samples = samples.to(z.dtype)
             z = z + samples
         #######################
-        
+
         pred_tex_comps = self.dec.attack_forward(z, view)
         return pred_tex_comps
 
@@ -213,7 +213,7 @@ class DeepAppearanceDecoderLayerRedChnlExpand(nn.Module):
         texture = self.texture_decoder(texture_code)
         mesh = self.mesh_fc(z_code)
         return texture, mesh
-    
+
     def attack_forward(self, z, v):
         view_code = self.relu(self.view_fc(v))
         z_code = self.relu(self.z_fc(z))
@@ -232,7 +232,7 @@ class DeepAppearanceDecoderLayerRedChnlExpand(nn.Module):
         p += list(self.z_fc.parameters())
         p += list(self.texture_fc.parameters())
         return p
-    
+
 class DeepAppearanceDecoder(nn.Module):
     def __init__(
         self, tex_size, mesh_size, z_dim=128, res=False, non=False, bilinear=False
@@ -340,7 +340,7 @@ class TextureDecoderLayerRed(nn.Module):
         out = self.upsample(x)
         return out
 
-    
+
 
 class TextureDecoder(nn.Module):
     def __init__(self, tex_size, z_dim, res=False, non=False, bilinear=False):

@@ -7,7 +7,7 @@ path_prefix_GH200 = "/workspace/uwing2/multiface/"
 
 # Please select one path out of the following three paths based on the server
 #######
-path_prefix = path_prefix_god2
+path_prefix = path_prefix_GH200
 #######
 
 sparsity_list = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
