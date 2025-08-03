@@ -8,8 +8,8 @@ import re
 file_dump_name_suffix = "_ibdct_decoder"
 path_to_privatar = "/scratch2/jianming/work/Privatar_prj"
 outsource_freq_list = [2,4,6,8,10,12,14,16]
-mutual_info_bound_list = [1, 0.1, 0.01]
-posterious_successful_rate_list = [0.4, 0.09, 0.035] # corresponding to `mutual_info_bound_list = [1, 0.1]`
+mutual_info_bound_list = [4, 3, 1, 0.1, 0.01]
+posterious_successful_rate_list = [0.98, 0.827, 0.4, 0.09, 0.035] # corresponding to `mutual_info_bound_list = [4, 3, 1, 0.1, 0.01]`
 prior_successful_rate = 1 / 56 # In total 56 expressions under expression identification attack.
 dimensionality = 256
 

@@ -6,8 +6,8 @@ import re
 
 file_dump_name_suffix = "_ibdct_decoder"
 outsource_freq_list = [0]
-mutual_info_bound_list = [0.01, 0.1, 1]
-posterious_successful_rate_list = [0.4, 0.09, 0.035] # corresponding to `mutual_info_bound_list = [1, 0.1]`
+mutual_info_bound_list = [4, 3, 1, 0.1, 0.01]
+posterious_successful_rate_list = [0.98, 0.827, 0.4, 0.09, 0.035] # corresponding to `mutual_info_bound_list = [4, 3, 1, 0.1, 0.01]`
 
 #########################
 ### Predefined Function
