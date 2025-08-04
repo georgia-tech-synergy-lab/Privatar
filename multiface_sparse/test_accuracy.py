@@ -1,35 +1,27 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
-# 
+#
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-from PIL import Image, ImageFile
+from PIL import Image
 
-ImageFile.LOAD_TRUNCATED_IMAGES = True
-
-from torch.utils.tensorboard import SummaryWriter
 import argparse
-import json
 import os
-import time
 from collections import OrderedDict
 
 import cv2
+import json
 import numpy as np
-from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
+import glob
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 from dataset import Dataset
 from models import DeepAppearanceVAE, ConvTranspose2dWN
-from torch.utils.data import DataLoader, RandomSampler
-from utils import Renderer, gammaCorrect
-import wandb
-
-wandb_enable = False
-sparsity_enable = True
+from utils import gammaCorrect, Renderer
 
 def remove_module_prefix(state_dict):
     """
@@ -113,31 +105,37 @@ def model_decoder_pruning(model, unified_pruning_ratio):
     # model.dec.texture_decoder.upsample[3].conv2.deconv,  model.dec.texture_decoder.upsample[3].conv2.bias, prune_indices_8 = weight_kernel_pruning_l1_norm(model.dec.texture_decoder.upsample[3].conv2.deconv, model.dec.texture_decoder.upsample[3].conv2.bias, unified_pruning_ratio)
     return model
 
-def main(args, camera_config, test_segment):
+
+def evaluate_many_images(args, camera_config, test_segment):
+    """
+    Linearly evaluate all samples in the test dataset.
+
+    Args:
+        args: Command line arguments
+        camera_config: Camera configuration
+        test_segment: Test segment configuration
+
+    Returns:
+        Tuple of (average_losses, output) for all samples
+    """
     device = torch.device("cuda", 0)
+    # Create dataset to get preprocessing parameters
+    try:
+        dataset_test = Dataset(
+            args.data_dir,
+            args.krt_dir,
+            args.framelist_test,
+            args.tex_size,
+            camset=None if camera_config is None else camera_config["test"],
+            valid_prefix=test_segment,
+        )
+    except Exception as e:
+        raise Exception(f"Error creating dataset: {e}")
+     
+    print(f"Dataset size: {len(dataset_test)}")
 
-    dataset_test = Dataset(
-        args.data_dir,
-        args.krt_dir,
-        args.framelist_test,
-        args.tex_size,
-        camset=None if camera_config is None else camera_config["test"],
-        valid_prefix=test_segment,
-    )
-
-    test_sampler = RandomSampler(dataset_test)
-
-    test_loader = DataLoader(
-        dataset_test,
-        args.val_batch_size,
-        sampler=test_sampler,
-        num_workers=args.n_worker,
-    )
-
-    print("#test samples", len(dataset_test))
-    writer = SummaryWriter(log_dir=args.result_path)
-
-    n_cams = len(set(camera_config["train"]).union(set(dataset_test.cameras)))
+    # Load and initialize model
+    n_cams = len(set(camera_config["train"]).union(set(dataset_test.cameras))) if camera_config else len(dataset_test.cameras)
     if args.arch == "base":
         model = DeepAppearanceVAE(
             args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams
@@ -145,273 +143,244 @@ def main(args, camera_config, test_segment):
     else:
         raise NotImplementedError
 
-    if sparsity_enable:
+    if args.unified_pruning_ratio is not None:
         model = model_decoder_pruning(model, args.unified_pruning_ratio)
 
-    # by default load the best_model.pth
-    if args.model_path is not None:
-        print("loading checkpoint from", args.model_path)
-        #### Verion 1
-        cleaned_state_dict = remove_module_prefix(torch.load(args.model_path))
-        
-        model_state_dict = model.state_dict()
-        for layer_name in model_state_dict:
-            if layer_name in cleaned_state_dict and "texture_encoder" not in layer_name and "texture_decoder" not in layer_name:
-                model_state_dict[layer_name] = cleaned_state_dict[layer_name]
-                print(f"load {layer_name}")
-        map_location = {"cuda:%d" % 0: "cuda:%d" % 0}
-        model.load_state_dict(model_state_dict)
-
-    # print("loading model from", args.model_path)
-    # state_dict = torch.load(args.model_path, map_location="cuda:0")
-    # model.load_state_dict(state_dict)
-    # model = model.to(device)
+    # Load model weights
+    print("loading model from", args.model_path)
+    state_dict = torch.load(args.model_path, map_location="cuda:0")
+    state_dict = remove_module_prefix(state_dict)
+    model.load_state_dict(state_dict)
+    model = model.to(device)
+    model.eval()
 
     renderer = Renderer()
-
     mse = nn.MSELoss()
 
+    # Get preprocessing parameters from dataset
     texmean = cv2.resize(dataset_test.texmean, (args.tex_size, args.tex_size))
     texmin = cv2.resize(dataset_test.texmin, (args.tex_size, args.tex_size))
     texmax = cv2.resize(dataset_test.texmax, (args.tex_size, args.tex_size))
     texmean = torch.tensor(texmean).permute((2, 0, 1))[None, ...].to(device)
     texmin = torch.tensor(texmin).permute((2, 0, 1))[None, ...].to(device)
     texmax = torch.tensor(texmax).permute((2, 0, 1))[None, ...].to(device)
-    texstd = dataset_test.texstd
+    texstd = torch.tensor(dataset_test.texstd, dtype=torch.float32).to(device)
+    texstd_squared = texstd ** 2  # Pre-compute squared value for loss calculations
     vertmean = (
         torch.tensor(dataset_test.vertmean, dtype=torch.float32)
         .view((1, -1, 3))
         .to(device)
     )
-    vertstd = dataset_test.vertstd
+    vertstd = torch.tensor(dataset_test.vertstd, dtype=torch.float32).to(device)
     loss_weight_mask = cv2.flip(cv2.imread(args.loss_weight_mask), 0)
     loss_weight_mask = loss_weight_mask / loss_weight_mask.max()
     loss_weight_mask = (
         torch.tensor(loss_weight_mask).permute(2, 0, 1).unsqueeze(0).float().to(device)
     )
 
+    loss_list = []
+    print(f"Evaluating {len(dataset_test)} samples from test dataset in batches of {args.val_batch_size}")
     os.makedirs(args.result_path, exist_ok=True)
 
-    if wandb_enable:
-        wandb_logger = wandb.init(
-            config={
-                "tex_size": args.tex_size,
-                "mesh_inp_size": args.mesh_inp_size,
-                "n_latent": args.nlatent,
-                "n_cams": n_cams,
-            },
-            project=args.project_name,
-            entity=args.author_name,
-            name=args.project_name,
-            group="group0",
-            dir=args.result_path,
-            job_type="testing",
-            reinit=True,
-        )
+    # Create DataLoader for batch processing
+    test_loader = DataLoader(
+        dataset_test,
+        batch_size=args.val_batch_size,
+        shuffle=False,  # Keep order for consistent evaluation
+        num_workers=0,  # Use 0 for single process to avoid issues
+        drop_last=False  # Don't drop the last batch if it's smaller
+    )
+
+    def run_net_batch(data):
+          M = data["M"].cuda()
+          gt_tex = data["tex"].cuda()
+          vert_ids = data["vert_ids"].cuda()
+          uvs = data["uvs"].cuda()
+          uv_ids = data["uv_ids"].cuda()
+          avg_tex = data["avg_tex"].cuda()
+          view = data["view"].cuda()
+          transf = data["transf"].cuda()
+          verts = data["aligned_verts"].cuda()
+          photo = data["photo"].cuda()
+          mask = data["mask"].cuda()
+          cams = data["cam"].cuda()
+          batch, channel, height, width = avg_tex.shape
+
+          output = {}
+
+          if args.arch == "warp":
+              pred_tex, pred_verts, unwarped_tex, warp_field, kl = model(
+                  avg_tex, verts, view, cams=cams
+              )
+              output["unwarped_tex"] = unwarped_tex
+              output["warp_field"] = warp_field
+          else:
+              pred_tex, pred_verts, kl = model(avg_tex, verts, view, cams=cams)
+          vert_loss = mse(pred_verts, verts)
+
+          pred_verts = pred_verts * vertstd + vertmean
+          pred_tex = (pred_tex * texstd + texmean) / 255.0
+          gt_tex = (gt_tex * texstd + texmean) / 255.0
+
+          loss_mask = loss_weight_mask.repeat(batch, 1, 1, 1)
+          tex_loss = mse(pred_tex * mask, gt_tex * mask) * (255**2) / texstd_squared
+
+          if args.lambda_screen > 0:
+              screen_mask, rast_out = renderer.render(
+                  M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, args.resolution
+              )
+              pred_screen, rast_out = renderer.render(
+                  M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, args.resolution
+              )
+
+              screen_loss = (
+                  torch.mean((pred_screen - photo) ** 2 * screen_mask)
+                  * (255**2)
+                  / texstd_squared
+              )
+          else:
+              screen_loss, pred_screen = torch.zeros([]), None
+
+          total_loss = 0
+          if args.lambda_verts > 0:
+              total_loss = total_loss + args.lambda_verts * vert_loss
+          if args.lambda_tex > 0:
+              total_loss = total_loss + args.lambda_tex * tex_loss
+          if args.lambda_screen > 0:
+              total_loss = total_loss + args.lambda_screen * screen_loss
+          if args.lambda_kl > 0:
+              total_loss = total_loss + args.lambda_kl * kl
+
+          losses = {
+              "total_loss": total_loss,
+              "vert_loss": vert_loss,
+              "screen_loss": screen_loss,
+              "tex_loss": tex_loss,
+              "denorm_tex_loss": tex_loss * texstd_squared,
+              "kl": kl,
+          }
+
+          output["pred_screen"] = pred_screen
+          output["pred_verts"] = pred_verts
+          output["pred_tex"] = pred_tex
+
+          return losses, output
+
+    def save_img_single(data, output, tag="single_eval"):
+          # Fix tensor shapes for proper image saving
+          gt_screen = data["photo"] * 255
+          pred_tex = torch.clamp(output["pred_tex"] * 255, 0, 255)
+
+          # Check if we're using template data (when exact match wasn't found)
+          using_template = data.get('_using_template', False)
+
+          if output["pred_screen"] is not None:
+              pred_screen = torch.clamp(output["pred_screen"] * 255, 0, 255)
+              # Convert pred_screen from (batch, width, height, channels) to (batch, height, width, channels)
+              pred_screen = pred_screen.permute(0, 2, 1, 3)
+              save_pred_image = pred_screen.detach().cpu().numpy().astype(np.uint8)
+              save_pred_image = (255 * gammaCorrect(save_pred_image / 255.0)).astype(np.uint8)
+              # Since we're now processing single samples, take the first (and only) element
+              img = Image.fromarray(save_pred_image[0])
+              # Apply transformations: rotate clockwise 90 degrees and flip horizontally
+              img = img.rotate(-90, expand=True)  # -90 for clockwise rotation
+              img = img.transpose(Image.FLIP_LEFT_RIGHT)  # Flip horizontally
+              # Save the transformed image
+              img.save(os.path.join(args.result_path, f"pred_rendered_{tag}.png"))
+              print(f"  - pred_rendered_{tag}.png: Neural face rendering result")
+
+    # Import tqdm for progress bar
+    
+    # Process batches with progress bar
+    batch_idx = 0
+    pbar = tqdm(test_loader, desc="Evaluating batches", unit="batch")
+    
+    for data in pbar:
+        batch_size = data["avg_tex"].shape[0]
         
-    def run_net(data):
-        M = data["M"].cuda()
-        gt_tex = data["tex"].cuda()
-        vert_ids = data["vert_ids"].cuda()
-        uvs = data["uvs"].cuda()
-        uv_ids = data["uv_ids"].cuda()
-        avg_tex = data["avg_tex"].cuda()
-        view = data["view"].cuda()
-        transf = data["transf"].cuda()
-        verts = data["aligned_verts"].cuda()
-        photo = data["photo"].cuda()
-        mask = data["mask"].cuda()
-        cams = data["cam"].cuda()
-        batch, channel, height, width = avg_tex.shape
+        # Move data to GPU
+        for key, value in data.items():
+            if isinstance(value, torch.Tensor):
+                data[key] = value.cuda()
+            elif isinstance(value, (list, tuple)):
+                # Handle lists/tuples (like uvs, vert_ids, uv_ids)
+                data[key] = value
 
-        output = {}
+        # Add template usage flag
+        data['_using_template'] = False
 
-        if args.arch == "warp":
-            pred_tex, pred_verts, unwarped_tex, warp_field, kl = model(
-                avg_tex, verts, view, cams=cams
-            )
-            output["unwarped_tex"] = unwarped_tex
-            output["warp_field"] = warp_field
-        else:
-            pred_tex, pred_verts, kl = model(avg_tex, verts, view, cams=cams)
-        vert_loss = mse(pred_verts, verts)
+        # Run inference on batch
+        with torch.no_grad():
+            losses, output = run_net_batch(data)
+            loss_list.append(losses)
+            
+            # Update progress bar with current loss values
+            total_loss = losses['total_loss'].item()
+            tex_loss = losses['denorm_tex_loss'].item()
+            screen_loss = losses['screen_loss'].item()
+            
+            pbar.set_postfix({
+                'Batch': f"{batch_idx+1}/{len(test_loader)}",
+                'Total': f"{total_loss:.4f}",
+                'Tex': f"{tex_loss:.4f}",
+                'Screen': f"{screen_loss:.4f}"
+            })
 
-        pred_verts = pred_verts * vertstd + vertmean
-        pred_tex = (pred_tex * texstd + texmean) / 255.0
-        gt_tex = (gt_tex * texstd + texmean) / 255.0
+            # Save results for each sample in the batch
+            if args.save_img:
+                os.makedirs(args.result_path, exist_ok=True)
+                for i in range(batch_size):
+                    # Extract single sample data for saving
+                    sample_data = {}
+                    for key, value in data.items():
+                        if isinstance(value, torch.Tensor):
+                            sample_data[key] = value[i:i+1]  # Keep batch dimension
+                        else:
+                            sample_data[key] = value
+                    
+                    # Extract single sample output
+                    sample_output = {}
+                    for key, value in output.items():
+                        if isinstance(value, torch.Tensor):
+                            sample_output[key] = value[i:i+1]  # Keep batch dimension
+                        else:
+                            sample_output[key] = value
+                    
+                    # Calculate global sample index
+                    global_sample_idx = batch_idx * args.val_batch_size + i
+                    if args.save_img:
+                        save_img_single(sample_data, sample_output, f"sample_{global_sample_idx}")
+        
+        batch_idx += 1
 
-        loss_mask = loss_weight_mask.repeat(batch, 1, 1, 1)
-        tex_loss = mse(pred_tex * mask, gt_tex * mask) * (255**2) / (texstd**2)
-
-        if args.lambda_screen > 0:
-            screen_mask, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, args.resolution
-            )
-            pred_screen, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, args.resolution
-            )
-            screen_loss = (
-                torch.mean((pred_screen - photo) ** 2 * screen_mask)
-                * (255**2)
-                / (texstd**2)
-            )
-        else:
-            screen_loss, pred_screen = torch.zeros([]), None
-
-        total_loss = 0
-        if args.lambda_verts > 0:
-            total_loss = total_loss + args.lambda_verts * vert_loss
-        if args.lambda_tex > 0:
-            total_loss = total_loss + args.lambda_tex * tex_loss
-        if args.lambda_screen > 0:
-            total_loss = total_loss + args.lambda_screen * screen_loss
-        if args.lambda_kl > 0:
-            total_loss = total_loss + args.lambda_kl * kl
-
-        losses = {
-            "total_loss": total_loss,
-            "vert_loss": vert_loss,
-            "screen_loss": screen_loss,
-            "tex_loss": tex_loss,
-            "denorm_tex_loss": tex_loss * (texstd**2),
-            "kl": kl,
+    # Calculate average losses across all images
+    avg_losses = {}
+    if loss_list:
+        # Initialize sums
+        loss_sums = {
+            'total_loss': 0.0,
+            'vert_loss': 0.0, 
+            'denorm_tex_loss': 0.0,
+            'screen_loss': 0.0
         }
-
-        output["pred_screen"] = pred_screen
-        output["pred_verts"] = pred_verts
-        output["pred_tex"] = pred_tex
-
-        return losses, output
-
-    def save_img(data, output, tag=""):
-        gt_screen = data["photo"] * 255
-        gt_tex = data["tex"].cuda() * texstd + texmean
-        pred_tex = torch.clamp(output["pred_tex"] * 255, 0, 255)
-        if output["pred_screen"] is not None:
-            pred_screen = torch.clamp(output["pred_screen"] * 255, 0, 255)
-            # apply gamma correction
-            save_pred_image = pred_screen.detach().cpu().numpy().astype(np.uint8) 
-            save_pred_image = (255 * gammaCorrect(save_pred_image / 255.0)).astype(np.uint8)
-            if len(save_pred_image.shape) == 4:
-                for _batch_id in range(save_pred_image.shape[0]):
-                    Image.fromarray(save_pred_image[_batch_id]).save(
-                        os.path.join(args.result_path, f"pred_{tag}_{_batch_id}.png")
-                    )
-     
-        save_gt_image = gt_screen.detach().cpu().numpy().astype(np.uint8)
-        if len(save_gt_image.shape) == 4:
-            for _batch_id in range(save_gt_image.shape[0]):
-                save_gt_image[_batch_id] = (255 * gammaCorrect(save_gt_image[_batch_id] / 255.0)).astype(np.uint8)
-                Image.fromarray(save_gt_image[_batch_id]).save(os.path.join(args.result_path, f"gt_{tag}_{_batch_id}.png"))
-            
-        # apply gamma correction
-        save_gt_tex_image = gt_tex.detach().permute((0,2,3,1)).cpu().numpy().astype(np.uint8)
-        if len(save_gt_tex_image.shape) == 4:
-            for _batch_id in range(save_gt_tex_image.shape[0]):
-                save_gt_tex_image[_batch_id] = (255 * gammaCorrect(save_gt_tex_image[_batch_id] / 255.0)).astype(np.uint8)
-                Image.fromarray(save_gt_tex_image[_batch_id]).save(os.path.join(args.result_path, f"gt_tex_{tag}_{_batch_id}.png"))
-            
         
-        save_pred_tex_image = pred_tex.detach().permute((0,2,3,1)).cpu().numpy().astype(np.uint8)
-        if len(save_pred_tex_image.shape) == 4:
-            for _batch_id in range(save_pred_tex_image.shape[0]):
-                save_pred_tex_image[_batch_id] = (255 * gammaCorrect(save_pred_tex_image[_batch_id] / 255.0)).astype(np.uint8)
-                Image.fromarray(save_pred_tex_image[_batch_id]).save(os.path.join(args.result_path, f"pred_tex_{tag}_{_batch_id}.png"))
+        # Sum up all losses
+        for losses in loss_list:
+            loss_sums['total_loss'] += losses['total_loss'].item()
+            loss_sums['vert_loss'] += losses['vert_loss'].item()
+            loss_sums['denorm_tex_loss'] += losses['denorm_tex_loss'].item() 
+            loss_sums['screen_loss'] += losses['screen_loss'].item()
 
-        if args.arch == "warp":
-            warp = output["warp_field"]
-            grid_img = (
-                torch.tensor(
-                    np.array(
-                        Image.open("grid.PNG").resize((args.tex_size, args.tex_size)),
-                        dtype=np.float32,
-                    )[None, ...]
-                )
-                .permute(0, 3, 1, 2)
-                .to(warp.device)
-            )
-            grid_img = F.grid_sample(grid_img, warp[-1:])
-            Image.fromarray(
-                grid_img[-1].detach().permute((1, 2, 0)).cpu().numpy().astype(np.uint8)
-            ).save(os.path.join(args.result_path, "warp_grid_%s.png" % tag))
+        # Calculate averages
+        n = len(loss_list)
+        avg_losses = {k: v/n for k,v in loss_sums.items()}
 
-    val_idx = 0
-    best_screen_loss = 1e8
-    best_tex_loss = 1e8
-    best_vert_loss = 1e8
-    model.train()
-
-    model.eval()
-    begin_time = time.time()
-
-    total, vert, tex, screen, kl = [], [], [], [], []
-    for i, data in tqdm(enumerate(test_loader)):
-        losses, output = run_net(data)
-        total.append(losses["total_loss"].item())
-        vert.append(losses["vert_loss"].item())
-        tex.append(losses["denorm_tex_loss"].item()) # denormalized 
-        screen.append(losses["screen_loss"].item())
-        kl.append(losses["kl"].item())
-
-        if wandb_enable:
-            wandb_logger.log(
-                {
-                    "total_loss": losses["total_loss"].item(),
-                    "vert_loss": losses["vert_loss"].item(),
-                    "tex_loss": losses["tex_loss"].item(),
-                    "screen_loss": losses["screen_loss"].item(),
-                    "kl": losses["kl"].item(),
-                }
-            )
-
-        if i < 10:
-            save_img(data, output, "val_%s_%s" % (val_idx, i))
-
-    total_loss = np.array(total).mean()
-    tex_loss = np.array(tex).mean()
-    vert_loss = np.array(vert).mean()
-    screen_loss = np.array(screen).mean()
-    kl = np.array(kl).mean()
-
-    writer.add_scalar('val/loss_tex', tex_loss, val_idx)
-    writer.add_scalar('val/loss_verts', vert_loss, val_idx)
-    writer.add_scalar('val/loss_screen', screen_loss, val_idx)
-    writer.add_scalar('val/loss_kl', kl, val_idx)
-
-    if wandb_enable:
-        wandb_logger.log(
-            {
-                "val_total_loss": total_loss,
-                "val_vert_loss": vert_loss,
-                "val_tex_loss": tex_loss,
-                "val_screen_loss": screen_loss,
-                "val_kl": kl,
-            }
-        )
-
-    print(
-        "val %d vert %.3f tex %.3f screen %.5f kl %.3f"
-        % (val_idx, vert_loss, tex_loss, screen_loss, kl)
-    )
-
-    best_screen_loss = min(best_screen_loss, screen_loss)
-    best_tex_loss = min(best_tex_loss, tex_loss)
-    best_vert_loss = min(best_vert_loss, vert_loss)
-
-    end_time = time.time()
-    print("Testing takes %f seconds" % (end_time - begin_time))
-    print(
-        "best screen loss %f, best tex loss %f best vert loss %f"
-        % (best_screen_loss, best_tex_loss, best_vert_loss)
-    )
-    return (
-        best_screen_loss,
-        best_tex_loss,
-        best_vert_loss,
-        screen_loss,
-        tex_loss,
-        vert_loss,
-    )
+        print("\nAverage losses across all images:")
+        print(f"Average total loss: {avg_losses['total_loss']:.6f}")
+        print(f"Average vertex loss: {avg_losses['vert_loss']:.6f}")
+        print(f"Average texture loss: {avg_losses['denorm_tex_loss']:.6f}")
+        print(f"Average screen loss: {avg_losses['screen_loss']:.6f}")
+    return avg_losses, output
 
 
 if __name__ == "__main__":
@@ -500,7 +469,7 @@ if __name__ == "__main__":
         "--val_num", type=int, default=500, help="Number of iterations for validation"
     )
     parser.add_argument(
-        "--n_worker", type=int, default=0, help="Number of workers loading dataset"
+        "--n_worker", type=int, default=8, help="Number of workers loading dataset"
     )
     parser.add_argument(
         "--pass_thres",
@@ -515,9 +484,6 @@ if __name__ == "__main__":
         help="Directory to output files",
     )
     parser.add_argument(
-        "--unified_pruning_ratio", type=float, default=0, help="model channel-wise sparsity ratio"
-    )
-    parser.add_argument(
         "--project_name",
         type=str,
         default=None,
@@ -529,8 +495,23 @@ if __name__ == "__main__":
         default=None,
         help="Jianming Tong",
     )
-
+    parser.add_argument(
+        "--save_latent_code",
+        action='store_true',
+        default=False,
+        help="save latent code to the result folder ./result_path/latent_code"
+    )
+    parser.add_argument(
+        "--save_img", action='store_true', default=False, help="Control knob to enable image save"
+    )
+    parser.add_argument(
+        "--gaussian_noise_covariance_path", type=str, default=None, help="The path of the noise covariance"
+    )
     parser.add_argument("--model_path", type=str, default=None, help="Model path")
+
+    parser.add_argument(
+        "--unified_pruning_ratio", type=float, default=None, help="The unified pruning ratio"
+    )
     experiment_args = parser.parse_args()
     print(experiment_args)
 
@@ -549,14 +530,14 @@ if __name__ == "__main__":
         assert len(segments) > 0
         # select a segment to check available camera ids
         camera_ids = [os.path.basename(x) for x in glob.glob(f"{experiment_args.data_dir}/unwrapped_uv_1024/{segments[0]}/*")]
-        camera_ids.remove('average')
+        camera_ids.remove('average') 
         camera_config = {
             "full": {
                 "train": camera_ids,
                 "test": camera_ids,
                 "visual": camera_ids[:2]
             }
-        }    
+        }
         # save the config for future use
         os.makedirs("camera_configs", exist_ok=True)
         with open(camera_config_path, 'w') as f:
@@ -572,33 +553,4 @@ if __name__ == "__main__":
     else:
         test_segment = None
 
-    (
-        best_screen_loss,
-        best_tex_loss,
-        best_vert_loss,
-        screen_loss,
-        tex_loss,
-        vert_loss,
-    ) = main(experiment_args, camera_set, test_segment)
-    print(
-        best_screen_loss,
-        best_tex_loss,
-        best_vert_loss,
-        screen_loss,
-        tex_loss,
-        vert_loss,
-    )
-    f = open(os.path.join(experiment_args.result_path, "result.txt"), "a")
-    f.write("\n")
-    f.write(
-        "Best screen loss %f, best tex loss %f,  best vert loss %f, screen loss %f, tex loss %f, vert_loss %f"
-        % (
-            best_screen_loss,
-            best_tex_loss,
-            best_vert_loss,
-            screen_loss,
-            tex_loss,
-            vert_loss,
-        )
-    )
-    f.close()
+    evaluate_many_images(experiment_args, camera_set, test_segment)  
