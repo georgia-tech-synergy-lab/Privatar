@@ -6,7 +6,7 @@ result_path_prefix = "/scratch2/jianming/work/Privatar_prj/render_results/"
 
 val_batch_size = 1
 bitwidth = 8
-project_name = f"original_vae"
+project_name = f"quantize_int8"
 best_model_path = "/scratch2/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth"
 result_path = f"{result_path_prefix}{project_name}"
 img_paths = "/scratch2/jianming/work/Privatar_prj/experiment_scripts/render_scripts/test_image_path"

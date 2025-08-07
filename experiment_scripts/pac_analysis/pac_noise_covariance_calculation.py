@@ -5,7 +5,7 @@ import os
 import re
 
 file_dump_name_suffix = "_ibdct_decoder"
-outsource_freq_list = [0]
+outsource_freq_list = [2,4,6,8,10,12,14]
 mutual_info_bound_list = [4, 3, 1, 0.1, 0.01]
 posterious_successful_rate_list = [0.98, 0.827, 0.4, 0.09, 0.035] # corresponding to `mutual_info_bound_list = [4, 3, 1, 0.1, 0.01]`
 
@@ -30,7 +30,7 @@ for outsource_freq_num in outsource_freq_list:
 
     #########################
     ### Please modify!!
-    folder_path = f'/home/jianming/work/Privatar_prj/testing_results/test_bdct_hp_ibdct_decoder_{outsource_freq_num}/latent_code'
+    folder_path = f'/scratch2/jianming/work/Privatar_prj/testing_results/test_accuracy_HP_all_expressions_{outsource_freq_num}/latent_code'
     # folder_path = f"/storage/ice1/3/0/jtong45/Privatar/testing_results/test_bdct4x4_hp_nn_decode_{outsource_freq_num}/latent_code"
     #########################
 

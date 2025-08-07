@@ -5,9 +5,8 @@ import math
 import os
 import re
 
-file_dump_name_suffix = "_ibdct_decoder"
+file_dump_name_suffix = "ibdct_decoder"
 path_to_privatar = "/scratch2/jianming/work/Privatar_prj"
-outsource_freq_list = [0]
 mutual_info_bound_list = [1, 0.1, 0.01]
 posterious_successful_rate_list = [0.4, 0.09, 0.035] # corresponding to `mutual_info_bound_list = [1, 0.1]`
 prior_successful_rate = 1 / 56 # In total 56 expressions under expression identification attack.
@@ -79,62 +78,54 @@ def dp_noise_calculation(l2_normd_data, prior_successful_rate, posterious_succes
 ###########################
 
 
-local_branch_noise_covariance_by_freqnum_by_noise = np.zeros((len(outsource_freq_list), len(posterious_successful_rate_list)))
-outsource_branch_noise_covariance_by_freqnum_by_noise = np.zeros((len(outsource_freq_list), len(posterious_successful_rate_list)))
 # Specify your folder path
 overall_noise_trace_list = []
 
+#########################
+### Please modify!!
+folder_path = f'{path_to_privatar}/testing_results/test_original_model/latent_code'
+#########################
 
-for j, outsource_freq_num in enumerate(outsource_freq_list):
+#########################
+# Read external files
+#########################
+captured_data_list = folder_path
+N = get_max_index(folder_path)
+print(f'The value of N (number_files) is: {N}')
+number_files = N
 
-  #########################
-  ### Please modify!!
-  folder_path = f'{path_to_privatar}/testing_results/test_original_model/latent_code'
-  #########################
+first_latent_code = torch.load(os.path.join(folder_path, "z_0.pth"))
+last_latent_code = torch.load(os.path.join(folder_path, f"z_{N}.pth"))
+major_latent_code = torch.load(os.path.join(folder_path, "z_2.pth"))
+batch_size = major_latent_code.shape[0]
+dim_size = major_latent_code.shape[1]
+print(f'The batch size list: {first_latent_code.shape[0]}, {batch_size}, {last_latent_code.shape[0]} for the first, major and the last latent code')
+total_test_size =  (N-2) * batch_size + first_latent_code.shape[0] + last_latent_code.shape[0]
+print(f'Overall data shape = ({total_test_size}, {dim_size})')
 
-  #########################
-  # Read external files
-  #########################
-  captured_data_list = folder_path
-  N = get_max_index(folder_path)
-  print(f'The value of N (number_files) is: {N}')
-  number_files = N
+##############################
+# Outsourced Branch
+##############################
+captured_z_data = np.zeros((total_test_size, dim_size))
+for k in tqdm(range(number_files)):
+    z_file_list = f"{captured_data_list}/z_{k+1}.pth"
+    captured_z = torch.load(z_file_list).to("cpu")
 
-  first_latent_code = torch.load(os.path.join(folder_path, "z_0.pth"))
-  last_latent_code = torch.load(os.path.join(folder_path, f"z_{N}.pth"))
-  major_latent_code = torch.load(os.path.join(folder_path, "z_2.pth"))
-  batch_size = major_latent_code.shape[0]
-  dim_size = major_latent_code.shape[1]
-  print(f'The batch size list: {first_latent_code.shape[0]}, {batch_size}, {last_latent_code.shape[0]} for the first, major and the last latent code')
-  total_test_size =  (N-2) * batch_size + first_latent_code.shape[0] + last_latent_code.shape[0]
-  print(f'Overall data shape = ({total_test_size}, {dim_size})')
+    captured_z_data[k*batch_size:(k+1)*batch_size] = captured_z.detach().numpy()
 
-  ##############################
-  # Outsourced Branch
-  ##############################
-  captured_z_data = np.zeros((total_test_size, dim_size))
-  for k in tqdm(range(number_files)):
-      z_file_list = f"{captured_data_list}/z_{k+1}.pth"
-      captured_z = torch.load(z_file_list).to("cpu")
+l2_normd = np.linalg.norm(captured_z_data)
 
-      captured_z_data[k*batch_size:(k+1)*batch_size] = captured_z.detach().numpy()
+# Print the covariance matrix
+np.save(f"./l2norm/l2norm_z_completed_outsourced.npy", l2_normd)
 
-  l2_normd = np.linalg.norm(captured_z_data)
-  
-  # Print the covariance matrix
-  np.save(f"./l2norm/l2norm_z.npy", l2_normd)
-  print(f"l2norm of outsourced vector when outsource_freq_num={outsource_freq_num}_z.npy", l2_normd)
-  
-  sigma_under_various_psr = dp_noise_calculation(l2_normd, prior_successful_rate, posterious_successful_rate_list)
-  sgl_noise_trace_list = []
-  for i, sigma in enumerate(sigma_under_various_psr):
-    trace_noise = np.sum(math.sqrt(sigma)*dimensionality)
-    print(f"when num_freq_compd={outsource_freq_num}, Accumulation of simga_i (trace) of noise covariance = {trace_noise} when MI = {mutual_info_bound_list[i]}")
-    # print(f"when num_freq_compd={outsource_freq_num}, Sigma of DP noise = {math.sqrt(sigma)} under psr={posterious_successful_rate_list[i]}")
-    dp_noise = np.ones(dimensionality) * math.sqrt(sigma)
-    np.save(f"./generated_dp_noise/dp_noise{file_dump_name_suffix}_{outsource_freq_num}_{mutual_info_bound_list[i]}.npy", dp_noise)
-    sgl_noise_trace_list.append(trace_noise)
-  overall_noise_trace_list.append(sgl_noise_trace_list)
+sigma_under_various_psr = dp_noise_calculation(l2_normd, prior_successful_rate, posterious_successful_rate_list)
+sgl_noise_trace_list = []
+for i, sigma in enumerate(sigma_under_various_psr):
+  trace_noise = np.sum(math.sqrt(sigma)*dimensionality)
+  dp_noise = np.ones(dimensionality) * math.sqrt(sigma)
+  np.save(f"./generated_dp_noise/dp_noise_completed_outsourced_{file_dump_name_suffix}_{mutual_info_bound_list[i]}.npy", dp_noise)
+  sgl_noise_trace_list.append(trace_noise)
+overall_noise_trace_list.append(sgl_noise_trace_list)
 
 for i in range(len(overall_noise_trace_list[0])):
   print(f"mi = {mutual_info_bound_list[i]}, noise trace = ", end=" ")

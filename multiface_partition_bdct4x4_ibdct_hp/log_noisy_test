@@ -1,0 +1,219 @@
+Namespace(arch='base', author_name='jimmytong', data_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS', framelist_test='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', gaussian_noise_covariance_path='/scratch2/jianming/work/Privatar_prj/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_2_1.npy', krt_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_path='/scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_2/best_model.pth', n_worker=8, nlatent=256, num_freq_comp_outsourced=2, pass_thres=50, project_name='test_noisy_accuracy_HP_all_expressions_2_1', resolution=[2048, 1334], result_path='/scratch2/jianming/work/Privatar_prj/testing_results/test_noisy_accuracy_HP_all_expressions_2_1', save_img=False, save_latent_code=False, test_segment_config='./test_segment.json', tex_size=1024, val_batch_size=32, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+Dataset size: 44536
+loading model from /scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_2/best_model.pth
+Evaluating 44536 samples from test dataset in batches of 32
+
+Average losses across all images:
+Average total loss: 0.271842
+Average vertex loss: 0.051539
+Average texture loss: 15.665222
+Average screen loss: 0.077421
+Namespace(arch='base', author_name='jimmytong', data_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS', framelist_test='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', gaussian_noise_covariance_path='/scratch2/jianming/work/Privatar_prj/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_2_0.1.npy', krt_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_path='/scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_2/best_model.pth', n_worker=8, nlatent=256, num_freq_comp_outsourced=2, pass_thres=50, project_name='test_noisy_accuracy_HP_all_expressions_2_0.1', resolution=[2048, 1334], result_path='/scratch2/jianming/work/Privatar_prj/testing_results/test_noisy_accuracy_HP_all_expressions_2_0.1', save_img=False, save_latent_code=False, test_segment_config='./test_segment.json', tex_size=1024, val_batch_size=32, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+Dataset size: 44536
+loading model from /scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_2/best_model.pth
+Evaluating 44536 samples from test dataset in batches of 32
+
+Average losses across all images:
+Average total loss: 0.319087
+Average vertex loss: 0.051535
+Average texture loss: 20.810866
+Average screen loss: 0.079608
+Namespace(arch='base', author_name='jimmytong', data_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS', framelist_test='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', gaussian_noise_covariance_path='/scratch2/jianming/work/Privatar_prj/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_2_0.01.npy', krt_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_path='/scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_2/best_model.pth', n_worker=8, nlatent=256, num_freq_comp_outsourced=2, pass_thres=50, project_name='test_noisy_accuracy_HP_all_expressions_2_0.01', resolution=[2048, 1334], result_path='/scratch2/jianming/work/Privatar_prj/testing_results/test_noisy_accuracy_HP_all_expressions_2_0.01', save_img=False, save_latent_code=False, test_segment_config='./test_segment.json', tex_size=1024, val_batch_size=32, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+Dataset size: 44536
+loading model from /scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_2/best_model.pth
+Evaluating 44536 samples from test dataset in batches of 32
+
+Average losses across all images:
+Average total loss: 0.946920
+Average vertex loss: 0.051538
+Average texture loss: 89.090177
+Average screen loss: 0.109499
+Namespace(arch='base', author_name='jimmytong', data_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS', framelist_test='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', gaussian_noise_covariance_path='/scratch2/jianming/work/Privatar_prj/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_4_1.npy', krt_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_path='/scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_4/best_model.pth', n_worker=8, nlatent=256, num_freq_comp_outsourced=4, pass_thres=50, project_name='test_noisy_accuracy_HP_all_expressions_4_1', resolution=[2048, 1334], result_path='/scratch2/jianming/work/Privatar_prj/testing_results/test_noisy_accuracy_HP_all_expressions_4_1', save_img=False, save_latent_code=False, test_segment_config='./test_segment.json', tex_size=1024, val_batch_size=32, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+Dataset size: 44536
+loading model from /scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_4/best_model.pth
+Evaluating 44536 samples from test dataset in batches of 32
+
+Average losses across all images:
+Average total loss: 0.267252
+Average vertex loss: 0.051418
+Average texture loss: 15.284337
+Average screen loss: 0.076909
+Namespace(arch='base', author_name='jimmytong', data_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS', framelist_test='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', gaussian_noise_covariance_path='/scratch2/jianming/work/Privatar_prj/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_4_0.1.npy', krt_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_path='/scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_4/best_model.pth', n_worker=8, nlatent=256, num_freq_comp_outsourced=4, pass_thres=50, project_name='test_noisy_accuracy_HP_all_expressions_4_0.1', resolution=[2048, 1334], result_path='/scratch2/jianming/work/Privatar_prj/testing_results/test_noisy_accuracy_HP_all_expressions_4_0.1', save_img=False, save_latent_code=False, test_segment_config='./test_segment.json', tex_size=1024, val_batch_size=32, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+Dataset size: 44536
+loading model from /scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_4/best_model.pth
+Evaluating 44536 samples from test dataset in batches of 32
+
+Average losses across all images:
+Average total loss: 0.272468
+Average vertex loss: 0.051424
+Average texture loss: 15.837185
+Average screen loss: 0.077278
+Namespace(arch='base', author_name='jimmytong', data_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS', framelist_test='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', gaussian_noise_covariance_path='/scratch2/jianming/work/Privatar_prj/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_4_0.01.npy', krt_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_path='/scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_4/best_model.pth', n_worker=8, nlatent=256, num_freq_comp_outsourced=4, pass_thres=50, project_name='test_noisy_accuracy_HP_all_expressions_4_0.01', resolution=[2048, 1334], result_path='/scratch2/jianming/work/Privatar_prj/testing_results/test_noisy_accuracy_HP_all_expressions_4_0.01', save_img=False, save_latent_code=False, test_segment_config='./test_segment.json', tex_size=1024, val_batch_size=32, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+Dataset size: 44536
+loading model from /scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_4/best_model.pth
+Evaluating 44536 samples from test dataset in batches of 32
+
+Average losses across all images:
+Average total loss: 0.337285
+Average vertex loss: 0.051425
+Average texture loss: 22.719971
+Average screen loss: 0.081819
+Namespace(arch='base', author_name='jimmytong', data_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS', framelist_test='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', gaussian_noise_covariance_path='/scratch2/jianming/work/Privatar_prj/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_6_1.npy', krt_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_path='/scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_6/best_model.pth', n_worker=8, nlatent=256, num_freq_comp_outsourced=6, pass_thres=50, project_name='test_noisy_accuracy_HP_all_expressions_6_1', resolution=[2048, 1334], result_path='/scratch2/jianming/work/Privatar_prj/testing_results/test_noisy_accuracy_HP_all_expressions_6_1', save_img=False, save_latent_code=False, test_segment_config='./test_segment.json', tex_size=1024, val_batch_size=32, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+Dataset size: 44536
+loading model from /scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_6/best_model.pth
+Evaluating 44536 samples from test dataset in batches of 32
+
+Average losses across all images:
+Average total loss: 0.266629
+Average vertex loss: 0.051047
+Average texture loss: 15.306149
+Average screen loss: 0.077068
+Namespace(arch='base', author_name='jimmytong', data_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS', framelist_test='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', gaussian_noise_covariance_path='/scratch2/jianming/work/Privatar_prj/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_6_0.1.npy', krt_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_path='/scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_6/best_model.pth', n_worker=8, nlatent=256, num_freq_comp_outsourced=6, pass_thres=50, project_name='test_noisy_accuracy_HP_all_expressions_6_0.1', resolution=[2048, 1334], result_path='/scratch2/jianming/work/Privatar_prj/testing_results/test_noisy_accuracy_HP_all_expressions_6_0.1', save_img=False, save_latent_code=False, test_segment_config='./test_segment.json', tex_size=1024, val_batch_size=32, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+Dataset size: 44536
+loading model from /scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_6/best_model.pth
+Evaluating 44536 samples from test dataset in batches of 32
+
+Average losses across all images:
+Average total loss: 0.273447
+Average vertex loss: 0.051048
+Average texture loss: 16.006969
+Average screen loss: 0.077748
+Namespace(arch='base', author_name='jimmytong', data_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS', framelist_test='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/frame_list.txt', gaussian_noise_covariance_path='/scratch2/jianming/work/Privatar_prj/experiment_scripts/pac_analysis/noise_covariance/noise_sigma_outsource_ibdct_decoder_6_0.01.npy', krt_dir='/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT', lambda_kl=0.01, lambda_screen=1.0, lambda_tex=1, lambda_verts=1, log_every=1000, loss_weight_mask='./loss_weight_mask.png', lr=0.0003, max_iter=200000, mesh_inp_size=21918, model_path='/scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_6/best_model.pth', n_worker=8, nlatent=256, num_freq_comp_outsourced=6, pass_thres=50, project_name='test_noisy_accuracy_HP_all_expressions_6_0.01', resolution=[2048, 1334], result_path='/scratch2/jianming/work/Privatar_prj/testing_results/test_noisy_accuracy_HP_all_expressions_6_0.01', save_img=False, save_latent_code=False, test_segment_config='./test_segment.json', tex_size=1024, val_batch_size=32, val_every=5000, val_num=500)
+camera config file for 6795937 exists, loading...
+checking 0
+checking 1000
+checking 2000
+checking 3000
+checking 4000
+checking 5000
+checking 6000
+checking 7000
+checking 8000
+checking 9000
+checking 10000
+checking 11000
+checking 12000
+checking 13000
+Dataset size: 44536
+loading model from /scratch2/jianming/work/Privatar_prj/training_results/bdct_hp_ibdct_decoder_6/best_model.pth
+Evaluating 44536 samples from test dataset in batches of 32

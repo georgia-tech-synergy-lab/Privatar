@@ -4,7 +4,7 @@ import os
 data_dir = "/scratch2/multiface/dataset"
 result_path_prefix = "/scratch2/jianming/work/Privatar_prj/render_results/"
 
-val_batch_size = 40
+val_batch_size = 32
 unified_pruning_ratio = 0.1
 project_name = f"test_accuracy_sparse_{unified_pruning_ratio}"
 best_model_path = f"/scratch2/jianming/work/Privatar_prj/training_results/sparse_0_{unified_pruning_ratio*10%10:0.0f}/best_model.pth"

@@ -4,7 +4,7 @@ import os
 data_dir = "/scratch2/multiface/dataset"
 result_path_prefix = "/scratch2/jianming/work/Privatar_prj/render_results/"
 
-val_batch_size = 40
+val_batch_size = 32
 bitwidth = 8 # could be 8 or 16, as torch only supports int8 and int16
 project_name = f"test_accuracy_quant_{bitwidth}"
 best_model_path = "/scratch2/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth"

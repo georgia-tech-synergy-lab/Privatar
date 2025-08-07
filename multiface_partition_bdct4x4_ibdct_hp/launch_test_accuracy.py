@@ -2,9 +2,9 @@ import os
 
 # Please select one path out of the following three paths based on the server
 data_dir = "/scratch2/multiface/dataset"
-result_path_prefix = "/scratch2/jianming/work/Privatar_prj/render_results/"
+result_path_prefix = "/scratch2/jianming/work/Privatar_prj/testing_results/"
 
-val_batch_size = 40
+val_batch_size = 32
 num_freq_comp_outsourced_list = [2, 4, 6, 8, 10, 12, 14]
 for num_freq_comp_outsourced in num_freq_comp_outsourced_list:
   project_name = f"test_accuracy_HP_all_expressions_{num_freq_comp_outsourced}"
