@@ -15,7 +15,7 @@ val_batch_size = 10
 epochs = 2 
 #######
 
-result_path = f"/workspace/uwing2/Privatar/training_results/{project_name}"
+result_path = f"/scratch2/jianming/work/Privatar_prj/training_results/{project_name}"
 if not os.path.exists(result_path):
     os.makedirs(result_path)
 

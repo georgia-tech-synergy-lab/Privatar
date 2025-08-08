@@ -132,7 +132,6 @@ class DeepAppearanceVAE(nn.Module):
         return self.cc.parameters()
 
 
-
 class DeepAppearanceVAEDirectSplit(nn.Module):
     def __init__(
         self,
