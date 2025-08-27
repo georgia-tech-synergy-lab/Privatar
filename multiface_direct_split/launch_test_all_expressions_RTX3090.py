@@ -5,10 +5,11 @@ data_dir = "/scratch2/multiface/dataset"
 result_path_prefix = "/scratch2/jianming/work/Privatar_prj/render_results/"
 
 val_batch_size = 1
-project_name = f"original_vae"
-best_model_path = "/scratch2/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth"
+project_name = f"original_vae_direct_split_exp"
+best_model_path = "/scratch2/jianming/work/Privatar_prj/training_results/test_vae_direct_split/best_model.pth"
 result_path = f"{result_path_prefix}{project_name}"
 img_paths = "/scratch2/jianming/work/Privatar_prj/experiment_scripts/render_scripts/test_image_path"
+# img_paths ="/scratch2/jianming/work/Privatar_prj/experiment_scripts/render_scripts/training_dataset.txt"
 
 if not os.path.exists(result_path):
     os.makedirs(result_path)
