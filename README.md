@@ -284,4 +284,20 @@ trace of covariance = 12.812623106426202 for freq component = 15
 
 Note, `custom_scripts` contains scripts for development, maintainence and verification purpose.
 
+
+## Script 3: Render a specific expression or a selected sets of expression using well-trained model.
+To help creating visualized expression rendered from a given model configuration, we also offer script under each setup to render visual avatar prediction for specified input images.
+
+Specifically, the set of images the model would render is detailed ```/scratch2/jianming/work/Privatar_prj/experiment_scripts/render_scripts/test_image_path```.
+
+To launch the image rendering,
+```bash
+cd <path_to_privatar>/<path_to_configuration>/
+python3 launch_test_all_expressions_RTX3090.py
+```
+where ```<path_to_configuration>``` could be multiface, multiface_partition_bdct4x4_ibdct, multiface_quantization, multiface_direct_split, multiface_partition_bdct4x4_ibdct_hp and multiface_sparse.
+
+It will shows results into the folder ```<path_to_privatar>/render_results/<configuration_name>```
+
+
 Have Fun! Enjoy! :D
