@@ -15,19 +15,21 @@ Privatar is the first that leverages both local and untrusted cloud to concurren
 - multiface_partition_bdct4x4_hp: Decompose unwrapped texture into multiple frequency components AND horizontally partition all components into local and cloud. Adopt BDCT filter with block=4, which gives 16 different frequency blocks, this remove 2 convolution layers. The number of outsourced frequency components is controlled via ```num_freq_comp_outsourced```.
 - multiface_sparse: add sparsity to only decoder of the original VAE model.
 - multiface_quantization: change the bitprecision of data into 8-/16-/32-bit integer for the decoder only.
+- multiface_direct_split: directly split the model architecture into private and public branches.
 
 
 # Installation
 We list two flows to install, run and test Privatar because different environments have different package in support. E.g. RTX 3090 supports ```RasterizeGLContext``` but GH200 only supports ```RasterizeCudaContext```. To reduce the effort for setting up configurations for different platforms, we directly prepare two sets of scripts, separately. 
 
 ## Step 1: Setup GPU Docker
--  For typical desktop-class GPU such as RTX 3090, we recommend using the conda virtual environment.
+<!-- -  For typical desktop-class GPU such as RTX 3090, we recommend using the conda virtual environment.
 ```bash
 conda create -n <your_favoriate_name> python=3.7
 conda activate <your_favoriate_name>
-```
+``` 
 
 - For cloud-class GPU such as GH200 
+We recommand using NVIDIA built-in docker.-->
 We recommand using NVIDIA built-in docker.
 
 Command 1: Download the docker.
@@ -37,50 +39,56 @@ docker run --gpus all -it --rm nvcr.io/nvidia/pytorch:xx.xx-py3
 ```
 Note: our experiments base on nvcr.io/nvidia/pytorch:24.01-py3
 
-Command 2: Launch the docker.
+Command 2: Download this repo to <path>
 ```bash
-docker run --gpus all -it --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 --memory 51200m  --rm <docker_name>
+git clone https://github.com/georgia-tech-synergy-lab/Privatar.git
 ```
-where <docker_name> refers to the name of your downloaded docker "nvcr.io/nvidia/pytorch:xx.xx-py3"
+
+Command 3: Launch the docker which links <path> to `/work` in docker.
+```bash
+docker run --gpus all -v <path>:/work -it --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 --memory 51200m  --rm <docker_name>
+```
+where <docker_name> refers to the name of your downloaded docker "nvcr.io/nvidia/pytorch:xx.xx-py3", and <path> refers to the path to Privatar.
 
 ## Step 2: Install Required Dependency
-
+Within in the Docker, install required dependency.
 - Install OS-level dependencies
 ```bash
-$ sudo apt-get install mesa-common-dev libegl1-mesa-dev libgles2-mesa-dev
-$ sudo apt-get install mesa-utils
+$ apt-get install mesa-common-dev libegl1-mesa-dev libgles2-mesa-dev
+$ apt-get install mesa-utils
 $ glxinfo | grep -i opengl
 ```
 
 - Install python packages
 ```
-pip3 install torch==1.13.0 -f https://download.pytorch.org/whl/cu121/torch_stable.html
+pip3 install torch
 pip3 install Pillow ninja imageio imageio_ffmpeg six tensorboard opencv-python==4.8.0.74 wandb torchjpeg
 ```
 Note: we use "wandb" to track the training, testing progress and record the final results.
 By default, wandb is turned off, u could change `wandb_enable` from each training/testing script to enable wandb.
 
-- Download and install NVDiffrast
+- Install nvdiffrast package
 ```bash
-cd <path_to_privatar>
 git clone https://github.com/NVlabs/nvdiffrast
 cd nvdiffrast
 python3 setup.py install
 ```
 
-- Download and install torchjpeg
+<!-- - Download and install torchjpeg (if )
 ```bash
 git clone https://github.com/Queuecumber/torchjpeg
 cd torchjpeg
 pip3 setup.py install
 ```
-We don't recommend installing torchjpeg using pip3 install because it might break other dependencies.
+We don't recommend installing torchjpeg using pip3 install because it might break other dependencies. -->
 
 ## Step 3: Download Datasets
 ```bash
 cd <path_to_privatar>
+mkdir dataset
 python3 ./multiface/download_dataset.py --dest "<path_to_Privatar>/dataset" --download_config "./mini_download_config.json"
 ```
+If u follow above instructions, then <path_to_privatar> should be `/work`.
 
 ## Step 4: Download pretrained model
 The pretrained weights for different users in the provided datasets are collected at this [facial_pretrained_datasets](https://github.com/facebookresearch/multiface/blob/main/documentation/INSTALLATION.md). We use 6795937 base model as the evaluation target. Other structure would work as well. The link for the pretrained model weights of 6795937 is [6795937_base](https://fb-baas-f32eacb9-8abb-11eb-b2b8-4857dd089e15.s3.amazonaws.com/MugsyDataRelease/PretrainedModel/6795937--GHS-base_nosl/best_model.pth)
