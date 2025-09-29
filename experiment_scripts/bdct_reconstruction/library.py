@@ -32,9 +32,9 @@ tex_size = 1024
 val_batch_size = 1
 n_worker = 1
 project_name = "bdct_4x4_reconstruction"
-path_to_privatar = "/scratch1/jianming/multiface"
-data_dir = f"{path_to_privatar}/dataset/m--20180927--0000--7889059--GHS" 
-krt_dir = f"{path_to_privatar}/dataset/m--20180927--0000--7889059--GHS/KRT"
+path_to_privatar = "/work"
+data_dir = f"{path_to_privatar}/dataset/m--20180227--0000--6795937--GHS" 
+krt_dir = f"{path_to_privatar}/dataset/m--20180227--0000--6795937--GHS/KRT"
 camera_configs_path = f"{path_to_privatar}/experiment_scripts/empirical_attack/attack-camera-split-config_6795937.json"
 framelist_train = f"{path_to_privatar}/experiment_scripts/empirical_attack/selected_expression_frame_list.txt"
 subject_id = data_dir.split("--")[-2]
@@ -43,7 +43,7 @@ result_path = f"{path_to_privatar}/testing_results/{project_name}"
 attack_camera_config_path = f"{path_to_privatar}/experiment_scripts/empirical_attack/attack-camera-split-config_{subject_id}.json"
 
 block_size = 4
-total_frequency_components = block_size * block_size
+total_frequency_component = block_size * block_size
 check_reconstruct_img = True
 save_block_img_to_drive = False
 load_attack_dataset = True
@@ -60,50 +60,6 @@ def load_image(image_path):
     Image Preprocessing Before BDCT
 """
 
-def img_reorder(x, bs, ch, h, w):
-    x = (x + 1) / 2 * 255
-    assert(x.shape[1] == 3, "Wrong input, Channel should equals to 3")
-    x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
-    x -= 128
-    x = x.view(bs * ch, 1, h, w)
-    x = F.unfold(x, kernel_size=(block_size, block_size), dilation=1, padding=0, stride=(block_size, block_size))
-    x = x.transpose(1, 2)
-    x = x.view(bs, ch, -1, block_size, block_size)
-    return x
-
-## Image reordering and testing
-def img_inverse_reroder(coverted_img, bs, ch, h, w):
-    x = coverted_img.view(bs* ch, -1, total_frequency_components)
-    x = x.transpose(1, 2)
-    x = F.fold(x, output_size=(h, w), kernel_size=(block_size, block_size), stride=(block_size, block_size))
-    x += 128
-    x = x.view(bs, ch, h, w)
-    x = dct.to_rgb(x)#.squeeze(0)
-    x = (x / 255.0) * 2 - 1
-    return x
-
-def img_reorder_no_extra_standard(x, bs, ch, h, w):
-    # x = (x + 1) / 2 * 255
-    assert(x.shape[1] == 3, "Wrong input, Channel should equals to 3")
-    x = dct.to_ycbcr(x)  # comvert RGB to YCBCR
-    # x -= 128
-    x = x.view(bs * ch, 1, h, w)
-    x = F.unfold(x, kernel_size=(block_size, block_size), dilation=1, padding=0, stride=(block_size, block_size))
-    x = x.transpose(1, 2)
-    x = x.view(bs, ch, -1, block_size, block_size)
-    return x
-
-## Image reordering and testing
-def img_inverse_reroder_no_extra_standard(coverted_img, bs, ch, h, w):
-    x = coverted_img.view(bs* ch, -1, total_frequency_components)
-    x = x.transpose(1, 2)
-    x = F.fold(x, output_size=(h, w), kernel_size=(block_size, block_size), stride=(block_size, block_size))
-    # x += 128
-    x = x.view(bs, ch, h, w)
-    x = dct.to_rgb(x)#.squeeze(0)
-    # x = (x / 255.0) * 2 - 1
-    return x
-
 def img_reorder_pure_bdct(x, bs, ch, h, w):
     # x = (x + 1) / 2 * 255
     assert(x.shape[1] == 3, "Wrong input, Channel should equals to 3")
@@ -117,7 +73,7 @@ def img_reorder_pure_bdct(x, bs, ch, h, w):
 
 ## Image reordering and testing
 def img_inverse_reroder_pure_bdct(coverted_img, bs, ch, h, w):
-    x = coverted_img.view(bs* ch, -1, total_frequency_components)
+    x = coverted_img.view(bs* ch, -1, total_frequency_component)
     x = x.transpose(1, 2)
     x = F.fold(x, output_size=(h, w), kernel_size=(block_size, block_size), stride=(block_size, block_size))
     # x += 128
@@ -132,84 +88,18 @@ def img_inverse_reroder_pure_bdct(coverted_img, bs, ch, h, w):
 
 ## Image frequency cosine transform
 def dct_transform(x, bs, ch, h, w):
-    rerodered_img = img_reorder(x, bs, ch, h, w)
+    rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
     block_num = h // block_size
     dct_block = dct.block_dct(rerodered_img) #BDCT
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
-    # A given frequency reference is "dct_block_reorder[freq_id, :, :, :, :]"
+    # dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, self.total_frequency_component).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3)
     return dct_block_reorder
 
-def dct_inverse_transform(dct_block_reorder, x, bs, ch, h, w):
+def dct_inverse_transform(dct_block_reorder, bs, ch, h, w):
     block_num = h // block_size
-    idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
-    inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
-    inverse_transformed_img = img_inverse_reroder(inverse_dct_block, bs, ch, h, w)
-    print(torch.allclose(inverse_transformed_img, x, atol=1e-4))
-    return inverse_transformed_img
-
-## Image frequency cosine transform
-def dct_transform_overall(x, bs, ch, h, w):
-    back_input = x
-    rerodered_img = img_reorder(x, bs, ch, h, w)
-    block_num = h // block_size
-    dct_block = dct.block_dct(rerodered_img) #BDCT
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
-    for i in range(total_frequency_components):
-        transforms.functional.to_pil_image(dct_block_reorder[i,0,:,:,:]).save(f'post_dataloader_bdct_colorconvert_extrastandard{i}.png')
-    # A given frequency reference is "dct_block_reorder[freq_id, :, :, :, :]"
-    idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
-    inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
-    inverse_transformed_img = img_inverse_reroder(inverse_dct_block, bs, ch, h, w)
-    print(torch.allclose(inverse_transformed_img, back_input, atol=1e-4))
-    return inverse_transformed_img
-
-## Image frequency cosine transform
-def dct_transform_overall_no_extra_standard(x, bs, ch, h, w):
-    back_input = x
-    rerodered_img = img_reorder_no_extra_standard(x, bs, ch, h, w)
-    block_num = h // block_size
-    dct_block = dct.block_dct(rerodered_img) #BDCT
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
-    for i in range(total_frequency_components):
-        transforms.functional.to_pil_image(dct_block_reorder[i,0,:,:,:]).save(f'post_dataloader_bdct_colorconvert_{i}.png')
-    # A given frequency reference is "dct_block_reorder[freq_id, :, :, :, :]"
-    idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
-    inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
-    inverse_transformed_img = img_inverse_reroder_no_extra_standard(inverse_dct_block, bs, ch, h, w)
-    print(torch.allclose(inverse_transformed_img, back_input, atol=1e-4))
-    return inverse_transformed_img
-
-## Image frequency cosine transform --> THE ONE used in actual reconstruction!!
-def dct_transform_overall_pure_bdct(x, bs, ch, h, w):
-    back_input = x
-    rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
-    block_num = h // block_size
-    dct_block = dct.block_dct(rerodered_img) #BDCT
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
-    for i in range(total_frequency_components):
-        transforms.functional.to_pil_image(dct_block_reorder[i,0,:,:,:]).save(f'post_dataloader_bdct_{i}.png')
-    # A given frequency reference is "dct_block_reorder[freq_id, :, :, :, :]"
-    idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
+    idct_dct_block_reorder = dct_block_reorder.view(bs, total_frequency_component, ch, block_num, block_num).permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
     inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
     inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
-    print(torch.allclose(inverse_transformed_img, back_input, atol=1e-4))
-    return inverse_transformed_img
-
-## Image frequency cosine transform
-def test_img_dct_transform_reorder_noise(x, bs, ch, h, w, freq_comp_lb):
-    back_input = x
-    rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
-    block_num = h // 4
-    dct_block = dct.block_dct(rerodered_img) #BDCT
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
-    
-    for i in range(freq_comp_lb):
-        dct_block_reorder[i, :, :, :, :] = dct_block_reorder[freq_comp_lb, :, :,  :, :]
- 
-    idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
-    inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
-    inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
-    print(torch.allclose(inverse_transformed_img, back_input, atol=1e-4))
     return inverse_transformed_img
 
 ## Image frequency cosine transform
@@ -219,12 +109,15 @@ def test_img_dct_transform(x, bs, ch, h, w):
     block_size = 4
     block_num = h // block_size
     dct_block = dct.block_dct(rerodered_img) #BDCT
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
- 
-    idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
+    
+    for i in range(total_frequency_component):
+      transforms.functional.to_pil_image(dct_block_reorder[0,i,:,:,:]).save(f'post_dataloader_bdct_frequency_component_{i}.png')
+    
+    idct_dct_block_reorder = dct_block_reorder.view(bs, total_frequency_component, ch, block_num, block_num).permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
     inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
     inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
-    print(torch.allclose(inverse_transformed_img, back_input, atol=1e-4))
+    print("whether reconstructed image is close to original image?", torch.allclose(inverse_transformed_img, back_input, atol=1e-1))
     return inverse_transformed_img
 
 ## Image frequency cosine transform
@@ -235,16 +128,15 @@ def test_img_dct_transform_drop_high_freq_reorder(x, bs, ch, h, w, freq_comp_lb)
     block_num = h // block_size
     total_block_num = block_size * block_size
     dct_block = dct.block_dct(rerodered_img) #BDCT
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
     
     for i in range(freq_comp_lb, total_block_num, 1):
-        dct_block_reorder[i, :, :, :, :] = dct_block_reorder[i, :, :, :, :].zero_()
-        # dct_block_reorder[:, :, i, :, :] = torch.zeros_like(dct_block_reorder[:, :, i, :, :])
+        dct_block_reorder[0, i, :, :, :] = dct_block_reorder[0, i, :, :, :].zero_()
  
-    idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
+    idct_dct_block_reorder = dct_block_reorder.view(bs, total_frequency_component, ch, block_num, block_num).permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
     inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
     inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
-    print(torch.allclose(inverse_transformed_img, back_input, atol=1e-4))
+    print(f"zero out {freq_comp_lb}~{(total_block_num-1)}-th frequency components, whether reconstructed image is close to original image?", torch.allclose(inverse_transformed_img, back_input, atol=1e-1))
     return inverse_transformed_img
 
 ## Image frequency cosine transform
@@ -255,46 +147,56 @@ def test_img_dct_transform_drop_low_freq_reorder(x, bs, ch, h, w, freq_comp_lb):
     block_num = h // block_size
     total_block_num = block_size * block_size
     dct_block = dct.block_dct(rerodered_img) #BDCT
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
     
     for i in range(0, freq_comp_lb, 1):
-        dct_block_reorder[i, :, :, :, :] = dct_block_reorder[i, :, :, :, :].zero_()
+        dct_block_reorder[0, i, :, :, :] = dct_block_reorder[0, i, :, :, :].zero_()
  
-    idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
+    idct_dct_block_reorder = dct_block_reorder.view(bs, total_frequency_component, ch, block_num, block_num).permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
     inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
     inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
-    print(torch.allclose(inverse_transformed_img, back_input, atol=1e-4))
+    print(f"zero out {freq_comp_lb}-th to {(total_block_num-1)}-th frequency components, whether reconstructed image is close to original image?", torch.allclose(inverse_transformed_img, back_input, atol=1e-1))
     return inverse_transformed_img
 
 ## Image frequency cosine transform
 def test_img_dct_transform_duplicate_freq_reorder(x, bs, ch, h, w, freq_comp_lb):
+    """
+        Drop (freq_comp_lb-1)-th to (total_block_num-1)-th frequency components.
+        Duplicate freq_comp_lb-th frequency component to all (freq_comp_lb-1)~total_block_num components.
+    """
     back_input = x
     rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
     block_size = 4
     block_num = h // block_size
     total_block_num = block_size * block_size
     dct_block = dct.block_dct(rerodered_img) #BDCT
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
     
     for i in range(freq_comp_lb, total_block_num, 1):
-        dct_block_reorder[i, :, :, :, :] = dct_block_reorder[freq_comp_lb, :, :,  :, :]
+        dct_block_reorder[0, i, :, :, :] = dct_block_reorder[0, freq_comp_lb, :, :,  :]
 
-    idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
+    idct_dct_block_reorder = dct_block_reorder.view(bs, total_frequency_component, ch, block_num, block_num).permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
     inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
     inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
-    print(torch.allclose(inverse_transformed_img, back_input, atol=1e-4))
+    print(f"duplicate {freq_comp_lb}-th frequency component to all {(freq_comp_lb-1)}-th to {(total_block_num-1)}-th frequency components, whether reconstructed image is close to original image?", torch.allclose(inverse_transformed_img, back_input, atol=1e-1))
     return inverse_transformed_img
 
 
 ## Image frequency cosine transform
 def test_img_dct_transform_reorder_noise_outsource(x, bs, ch, h, w, freq_comp_lb, path_variance_matrix_tensor, add_noise):
+    """
+        Drop (freq_comp_lb-1)-th to (total_block_num-1)-th frequency components.
+        Duplicate freq_comp_lb-th frequency component to all (freq_comp_lb-1)~total_block_num components.
+        
+        Add noise to all frequency components, and reconstruct the image.
+    """
     rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
     block_num = h // 4
     dct_block = dct.block_dct(rerodered_img) #BDCT
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3) # into (bs, ch, 64, block_num, block_num)
     
     for i in range(freq_comp_lb):
-        dct_block_reorder[i, :, :, :, :] = dct_block_reorder[freq_comp_lb, :, :,  :, :]
+        dct_block_reorder[0, i, :, :, :] = dct_block_reorder[0, freq_comp_lb, :, :,  :]
     if add_noise:
         mean = np.zeros(256)
         variance_matrix_tensor = torch.load(path_variance_matrix_tensor).cpu()
@@ -303,9 +205,10 @@ def test_img_dct_transform_reorder_noise_outsource(x, bs, ch, h, w, freq_comp_lb
         noise_sample = noise_sample.reshape(dct_block_reorder.shape)
         dct_block_reorder = dct_block_reorder + noise_sample
     
-    idct_dct_block_reorder = dct_block_reorder.permute(1, 2, 3, 4, 0).view(bs, ch, block_num*block_num, block_size, block_size)
+    idct_dct_block_reorder = dct_block_reorder.view(bs, total_frequency_component, ch, block_num, block_num).permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
     inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
     inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
+    print(f"add noise to all frequency components, whether reconstructed image is close to original image?", torch.allclose(inverse_transformed_img, back_input, atol=1e-1))
     return inverse_transformed_img
 
 
@@ -314,12 +217,15 @@ def test_img_dct_transform_reorder_noise_outsource(x, bs, ch, h, w, freq_comp_lb
 def dct_transform_nn_connect_hp( x, bs, ch, h, w):
     """
         The one that directly be used in nn based decoder HP implementation.
+        
+        Drop 0-th to (freq_comp_lb-1)-th frequency components.
+        Duplicate freq_comp_lb-th frequency component to all 0~freq_comp_lb-1 components.
     """
     rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
     block_num = h // block_size
     dct_block = dct.block_dct(rerodered_img) #BDCT
-    # dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(0, 4, 1, 2, 3)
+    # dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3)
     return dct_block_reorder
 
 def dct_inverse_transform_nn_connect_hp( dct_block_reorder,bs, ch, h, w):
@@ -330,6 +236,7 @@ def dct_inverse_transform_nn_connect_hp( dct_block_reorder,bs, ch, h, w):
     idct_dct_block_reorder = dct_block_reorder.permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
     inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
     inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
+    print("whether reconstructed image is close to original image?", torch.allclose(inverse_transformed_img, back_input, atol=1e-1))
     return inverse_transformed_img
     
     ## Image frequency cosine transform
@@ -352,8 +259,8 @@ def dct_transform_nn_connect( x, bs, ch, h, w):
     rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
     block_num = h // block_size
     dct_block = dct.block_dct(rerodered_img) #BDCT
-    # dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(4, 0, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
-    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_components).permute(0, 4, 1, 2, 3).reshape(bs, ch*total_frequency_components, block_num, block_num) # into (bs, ch, block_num, block_num, 16)
+    # dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3) # into (bs, ch, block_num, block_num, 16)
+    dct_block_reorder = dct_block.view(bs, ch, block_num, block_num, total_frequency_component).permute(0, 4, 1, 2, 3).reshape(bs, ch*total_frequency_component, block_num, block_num) # into (bs, ch, block_num, block_num, 16)
     return dct_block_reorder
 
 def dct_inverse_transform_nn_connect( dct_block_reorder,bs, ch, h, w):
@@ -361,7 +268,7 @@ def dct_inverse_transform_nn_connect( dct_block_reorder,bs, ch, h, w):
         The one that directly be used in multiface_partition_bdct4x4_nn_decoder
     """
     block_num = h // block_size
-    idct_dct_block_reorder = dct_block_reorder.view(bs, total_frequency_components, ch, block_num, block_num).permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
+    idct_dct_block_reorder = dct_block_reorder.view(bs, total_frequency_component, ch, block_num, block_num).permute(0, 2, 3, 4, 1).view(bs, ch, block_num*block_num, block_size, block_size)
     inverse_dct_block = dct.block_idct(idct_dct_block_reorder) #inverse BDCT
     inverse_transformed_img = img_inverse_reroder_pure_bdct(inverse_dct_block, bs, ch, h, w)
     return inverse_transformed_img
