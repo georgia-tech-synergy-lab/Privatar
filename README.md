@@ -388,9 +388,17 @@ Note that: ```using_pac_noise``` is the command to control using PAC privacy bas
 
 We also train a three-layer fully connected network which estimates the expression from the offloaded noisy latent code. Run following script to start the training.
 
+The NN attacker randomly takes one sample from each expression, as detailed in `/work/experiment_scripts/empirical_attack/selected_expression_frame_list.txt`, which becomes its training dataset.
+
 ```bash
+cd /work/multiface_partition_frequency_decompose
+python3 launch_train_nn_attacker.py
+```
 
-
+After training, launch the attack via
+```bash
+cd /work/multiface_partition_frequency_decompose
+python3 launch_test_nn_attacker.py
 ```
 
 # Additional Scripts
