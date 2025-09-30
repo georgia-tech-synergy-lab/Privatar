@@ -12,8 +12,8 @@ initial_model_weights_path = f"{path_to_privatar}/pretrain_model/6795937_best_mo
 train_batch_size = 10
 val_batch_size = 10
 epochs = 2 
-val_num = 1 # control total number of data samples to be computed for validation.
-max_iter = 1 # control total number of training iterations.
+val_num = 500 # control total number of data samples to be computed for validation.
+max_iter = 100000 # control total number of training iterations.
 #######
 
 for num_freq_comp_offloaded in num_freq_comp_offloaded_list:
