@@ -44,7 +44,7 @@ class LatentCodeAnalyzer:
         print("Loading latent codes from both paths...")
         
         # Load from path 1
-        files1 = sorted(glob.glob(str(self.path1 / "z_outsource_*.pth")))
+        files1 = sorted(glob.glob(str(self.path1 / "z_offload_*.pth")))
         print(f"Found {len(files1)} files in path 1")
         
         data1_list = []
@@ -61,7 +61,7 @@ class LatentCodeAnalyzer:
                 print(f"Error loading {file_path}: {e}")
         
         # Load from path 2
-        files2 = sorted(glob.glob(str(self.path2 / "z_outsource_*.pth")))
+        files2 = sorted(glob.glob(str(self.path2 / "z_offload_*.pth")))
         print(f"Found {len(files2)} files in path 2")
         
         data2_list = []
@@ -538,8 +538,8 @@ class LatentCodeAnalyzer:
 def main():
     """Main function to run the analysis."""
     # Define paths
-    path1 = "/scratch2/jianming/work/Privatar_prj/render_results/original_vae_direct_split_exp/latent_code"
-    path2 = "/scratch2/jianming/work/Privatar_prj/render_results/original_vae_direct_split/latent_code"
+    path1 = "/work/render_results/original_vae_direct_split_exp/latent_code"
+    path2 = "/work/render_results/original_vae_direct_split/latent_code"
     
     # Create analyzer
     analyzer = LatentCodeAnalyzer(path1, path2)

@@ -18,4 +18,5 @@ Both notebooks prove following conclusions
 ## L2 norm of each Frequency Component
 In order to quantatively measure the information contained in each frequency components, we offer a script `l2_norm_differences_of_each_freq_comp.py` to measure the L2 norm of differences for each individual frequency component.
 
+Further, image blurring is another approach which is often used in spliting input image into multiple components, as specified in the `blur_filter/l2_norm_blur_filter.py`
 

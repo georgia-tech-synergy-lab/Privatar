@@ -183,7 +183,7 @@ def test_img_dct_transform_duplicate_freq_reorder(x, bs, ch, h, w, freq_comp_lb)
 
 
 ## Image frequency cosine transform
-def test_img_dct_transform_reorder_noise_outsource(x, bs, ch, h, w, freq_comp_lb, path_variance_matrix_tensor, add_noise):
+def test_img_dct_transform_reorder_noise_offload(x, bs, ch, h, w, freq_comp_lb, path_variance_matrix_tensor, add_noise):
     """
         Drop (freq_comp_lb-1)-th to (total_block_num-1)-th frequency components.
         Duplicate freq_comp_lb-th frequency component to all (freq_comp_lb-1)~total_block_num components.

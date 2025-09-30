@@ -116,7 +116,7 @@ for sparsity_ratio in sparsity_ratio_list:
       1024, 21918, n_latent=256, n_cams=38
   ).to(device)
   
-  best_model_path = "/scratch2/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth"
+  best_model_path = "/work/pretrain_model/6795937_best_model.pth"
   model.load_state_dict(remove_module_prefix(torch.load(best_model_path)))
 
   model_decoder_pruning(model, sparsity_ratio)
@@ -157,7 +157,7 @@ for sparsity_ratio in sparsity_ratio_list:
 
   end_time = time.time()
 
-  print(f"Under sparsity_ratio = {sparsity_ratio}, batchsize = {batch_size}, inference latency on GPU 3090 = {(end_time - start_time) / total_inference}")
+  print(f"Under sparsity_ratio = {sparsity_ratio}, batchsize = {batch_size}, inference latency on GPU = {(end_time - start_time) / total_inference}")
   latency_list.append((end_time - start_time) / total_inference)
 
 print(latency_list)

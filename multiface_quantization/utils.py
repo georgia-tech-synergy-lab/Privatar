@@ -11,6 +11,7 @@ import nvdiffrast.torch as dr
 import torch
 from dataset import Dataset
 from PIL import Image
+import os
 
 # apply gamma correction on output images
 def gammaCorrect(img, dim=-1):
@@ -33,7 +34,16 @@ def gammaCorrect(img, dim=-1):
 
 class Renderer:
     def __init__(self):
-        self.glctx = dr.RasterizeGLContext()
+        # Default to CUDA to avoid fatal crashes when EGL/GL is unavailable.
+        # Opt-in to GL by setting env var NVDIFRAST_FORCE_GL=1.
+        force_gl = os.environ.get("NVDIFRAST_FORCE_GL") == "1"
+        if force_gl:
+            try:
+                self.glctx = dr.RasterizeGLContext()
+                return
+            except Exception:
+                pass
+        self.glctx = dr.RasterizeCudaContext()
 
     def render(self, M, pos, pos_idx, uv, uv_idx, tex, resolution=[2048, 1334]):
         ones = torch.ones((pos.shape[0], pos.shape[1], 1)).to(pos.device)

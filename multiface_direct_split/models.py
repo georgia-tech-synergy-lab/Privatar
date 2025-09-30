@@ -199,7 +199,7 @@ class DeepAppearanceVAEDirectSplit(nn.Module):
             kl_texture = torch.tensor(0).to(z_texture.device)
 
         if self.save_latent_code:
-            torch.save(z_texture, f"{self.latent_code_path}/z_outsource_{self.iter}.pth")
+            torch.save(z_texture, f"{self.latent_code_path}/z_offload_{self.iter}.pth")
             self.iter = self.iter + 1
         
         #######################

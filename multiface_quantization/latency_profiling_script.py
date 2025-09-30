@@ -300,7 +300,7 @@ batch_size = 1
 model = DeepAppearanceVAE(
     1024, 21918, n_latent=256, n_cams=38
 ).to(device)
-best_model_path = "/scratch2/jianming/work/multiface/pretrained_model/6795937_best_base_model.pth"
+best_model_path = "/work/pretrain_model/6795937_best_model.pth"
 model.load_state_dict(remove_module_prefix(torch.load(best_model_path)))
 model.eval()
 model = decoder_linear_quantization(model, bitwidth=8, datatype=torch.int8)
@@ -341,4 +341,4 @@ else:
 
 end_time = time.time()
 
-print(f"Under Batchsize = {batch_size}, inference latency on GPU 3090 = {(end_time - start_time) / total_inference}")
+print(f"Under Batchsize = {batch_size}, inference latency on GPU = {(end_time - start_time) / total_inference}")

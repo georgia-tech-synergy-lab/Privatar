@@ -24,13 +24,13 @@ import torch.optim as optim
 from dataset import Dataset
 from models import DeepAppearanceVAE, WarpFieldVAE, ConvTranspose2dWN
 import wandb
-from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import DataLoader, RandomSampler
 from utils import Renderer, gammaCorrect
 from datetime import datetime
 
-wandb_enable = True
+wandb_enable = False
 sparsity_enable = True
+force_gl = os.environ.get("NVDIFRAST_FORCE_GL") == "1"
 
 def weight_kernel_pruning_l1_norm(model, in_bias, prune_ratio):
     layer_shape = model.state_dict()['weight'].size()
@@ -94,9 +94,7 @@ def model_decoder_pruning(model, unified_pruning_ratio):
     return model
 
 def main(args, camera_config, test_segment):
-    local_rank = torch.distributed.get_rank()
-    torch.cuda.set_device(local_rank)
-    device = torch.device("cuda", local_rank)
+    device = torch.device("cuda:0")
 
     dataset_train = Dataset(
         args.data_dir,
@@ -115,8 +113,8 @@ def main(args, camera_config, test_segment):
         valid_prefix=test_segment,
     )
 
-    train_sampler = DistributedSampler(dataset_train)
-    test_sampler = DistributedSampler(dataset_test)
+    train_sampler = RandomSampler(dataset_train)
+    test_sampler = RandomSampler(dataset_test)
 
     train_loader = DataLoader(
         dataset_train,
@@ -131,14 +129,12 @@ def main(args, camera_config, test_segment):
         num_workers=args.n_worker,
     )
 
-    if local_rank == 0:
-        print("#train samples", len(dataset_train))
-        print("#test samples", len(dataset_test))
-        writer = SummaryWriter(log_dir=args.result_path)
+    print("#train samples", len(dataset_train))
+    print("#test samples", len(dataset_test))
+    writer = SummaryWriter(log_dir=args.result_path)
 
     n_cams = len(set(dataset_train.cameras).union(set(dataset_test.cameras)))
     if args.arch == "base":
-        # print(f"args.tex_size={args.tex_size}, args.mesh_inp_size={args.mesh_inp_size}, args.nlatent={args.nlatent}, n_cams={n_cams}")
         model = DeepAppearanceVAE(
             args.tex_size, args.mesh_inp_size, n_latent=args.nlatent, n_cams=n_cams
         ).to(device)
@@ -176,19 +172,19 @@ def main(args, camera_config, test_segment):
     else:
         raise NotImplementedError
 
-    model = torch.nn.parallel.DistributedDataParallel(model, [local_rank], local_rank, find_unused_parameters=True)
+    # model = torch.nn.parallel.DistributedDataParallel(model, [local_rank], local_rank, find_unused_parameters=True)
     renderer = Renderer()
 
-    if args.model_ckpt is not None:
-        print("loading checkpoint from", args.model_ckpt)
-        map_location = {"cuda:%d" % 0: "cuda:%d" % local_rank}
-        model.load_state_dict(torch.load(args.model_ckpt, map_location=map_location))
+    if args.model_path is not None:
+        print("loading checkpoint from", args.model_path)
+        pretrained_dict = torch.load(args.model_path, map_location="cuda:0")
+        filtered_dict = {k.replace('module.', ''): v for k, v in pretrained_dict.items() if 'module' in k}
+        model.load_state_dict(filtered_dict)
 
     if sparsity_enable:
-        model.module = model_decoder_pruning(model.module, args.unified_pruning_ratio)
-    print(model)
-    optimizer = optim.Adam(model.module.get_model_params(), args.lr, (0.9, 0.999))
-    optimizer_cc = optim.Adam(model.module.get_cc_params(), args.lr, (0.9, 0.999))
+        model = model_decoder_pruning(model, args.unified_pruning_ratio)
+    optimizer = optim.Adam(model.get_model_params(), args.lr, (0.9, 0.999))
+    optimizer_cc = optim.Adam(model.get_cc_params(), args.lr, (0.9, 0.999))
     mse = nn.MSELoss()
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
 
@@ -251,6 +247,12 @@ def main(args, camera_config, test_segment):
         batch, channel, height, width = avg_tex.shape
 
         output = {}
+        
+        height_render, width_render = args.resolution
+        photo_short = photo
+        if force_gl:
+            width_render = width_render - (width_render % 8)
+            photo_short = torch.Tensor(photo)[:, :, :width_render, :]
 
         if args.arch == "warp":
             pred_tex, pred_verts, unwarped_tex, warp_field, kl = model(
@@ -271,13 +273,13 @@ def main(args, camera_config, test_segment):
         tex_loss = mse(pred_tex * mask, gt_tex * mask) * (255**2) / (texstd**2)
         if args.lambda_screen > 0:
             screen_mask, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, loss_mask, [height_render, width_render]#args.resolution
             )
             pred_screen, rast_out = renderer.render(
-                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, args.resolution
+                M, pred_verts, vert_ids, uvs, uv_ids, pred_tex, [height_render, width_render]#args.resolution
             )
             screen_loss = (
-                torch.mean((pred_screen - photo) ** 2 * screen_mask)
+                torch.mean((pred_screen - photo_short) ** 2 * screen_mask[:, :, :width_render, :])
                 * (255**2)
                 / (texstd**2)
             )
@@ -323,18 +325,26 @@ def main(args, camera_config, test_segment):
                     Image.fromarray(save_pred_image[_batch_id]).save(
                         os.path.join(args.result_path, f"pred_{tag}_{_batch_id}.png")
                     )
+     
+        save_gt_image = gt_screen.detach().cpu().numpy().astype(np.uint8)
+        if len(save_gt_image.shape) == 4:
+            for _batch_id in range(save_gt_image.shape[0]):
+                save_gt_image[_batch_id] = (255 * gammaCorrect(save_gt_image[_batch_id] / 255.0)).astype(np.uint8)
+                Image.fromarray(save_gt_image[_batch_id]).save(os.path.join(args.result_path, f"gt_{tag}_{_batch_id}.png"))
+            
         # apply gamma correction
-        save_gt_image = gt_screen[-1].detach().cpu().numpy().astype(np.uint8)
-        save_gt_image = (255 * gammaCorrect(save_gt_image / 255.0)).astype(np.uint8)
-        Image.fromarray(save_gt_image).save(os.path.join(args.result_path, "gt_%s.png" % tag))
-        # apply gamma correction
-        save_gt_tex_image = gt_tex[-1].detach().permute((1, 2, 0)).cpu().numpy().astype(np.uint8)
-        save_gt_tex_image = (255 * gammaCorrect(save_gt_tex_image / 255.0)).astype(np.uint8)
-        Image.fromarray(save_gt_tex_image).save(os.path.join(args.result_path, "gt_tex_%s.png" % tag))
-        # apply gamma correction
-        save_pred_tex_image = pred_tex[-1].detach().permute((1, 2, 0)).cpu().numpy().astype(np.uint8)
-        save_pred_tex_image = (255 * gammaCorrect(save_pred_tex_image / 255.0)).astype(np.uint8)
-        Image.fromarray(save_pred_tex_image).save(os.path.join(args.result_path, "pred_tex_%s.png" % tag))
+        save_gt_tex_image = gt_tex.detach().permute((0,2,3,1)).cpu().numpy().astype(np.uint8)
+        if len(save_gt_tex_image.shape) == 4:
+            for _batch_id in range(save_gt_tex_image.shape[0]):
+                save_gt_tex_image[_batch_id] = (255 * gammaCorrect(save_gt_tex_image[_batch_id] / 255.0)).astype(np.uint8)
+                Image.fromarray(save_gt_tex_image[_batch_id]).save(os.path.join(args.result_path, f"gt_tex_{tag}_{_batch_id}.png"))
+            
+        
+        save_pred_tex_image = pred_tex.detach().permute((0,2,3,1)).cpu().numpy().astype(np.uint8)
+        if len(save_pred_tex_image.shape) == 4:
+            for _batch_id in range(save_pred_tex_image.shape[0]):
+                save_pred_tex_image[_batch_id] = (255 * gammaCorrect(save_pred_tex_image[_batch_id] / 255.0)).astype(np.uint8)
+                Image.fromarray(save_pred_tex_image[_batch_id]).save(os.path.join(args.result_path, f"pred_tex_{tag}_{_batch_id}.png"))
 
         if args.arch == "warp":
             warp = output["warp_field"]
@@ -370,15 +380,14 @@ def main(args, camera_config, test_segment):
         for i, data in enumerate(train_loader):
             losses, output = run_net(data)
             if batch_idx % args.val_every == 0:
-                if local_rank == 0:
-                    torch.save(
-                        model.state_dict(), os.path.join(args.result_path, "model.pth")
+                torch.save(
+                    model.state_dict(), os.path.join(args.result_path, "model.pth")
+                )
+                print(
+                    "model.pth saved [Epoch {} Batch Index {}]".format(
+                        epoch, batch_idx
                     )
-                    print(
-                        "model.pth saved [Epoch {} Batch Index {}]".format(
-                            epoch, batch_idx
-                        )
-                    )
+                )
 
             if (
                 (losses["total_loss"].item() > args.pass_thres * prev_loss)
@@ -388,11 +397,10 @@ def main(args, camera_config, test_segment):
                 print("throw away batch")
                 continue
 
-            if local_rank == 0:
-               writer.add_scalar('train/loss_tex',losses['tex_loss'].item(), batch_idx)
-               writer.add_scalar('train/loss_verts', losses['vert_loss'].item(), batch_idx)
-               writer.add_scalar('train/loss_screen', losses['screen_loss'].item(), batch_idx)
-               writer.add_scalar('train/loss_kl', losses['kl'].item(), batch_idx)
+            writer.add_scalar('train/loss_tex',losses['tex_loss'].item(), batch_idx)
+            writer.add_scalar('train/loss_verts', losses['vert_loss'].item(), batch_idx)
+            writer.add_scalar('train/loss_screen', losses['screen_loss'].item(), batch_idx)
+            writer.add_scalar('train/loss_kl', losses['kl'].item(), batch_idx)
 
             prev_loss = losses["total_loss"].item()
             prev_vert_loss = losses["vert_loss"].item()
@@ -436,7 +444,7 @@ def main(args, camera_config, test_segment):
                         losses["kl"].item(),
                     )
                 )
-                if local_rank == 0:
+                if args.save_img:
                     save_img(data, output, "train_%d" % batch_idx)
 
             if batch_idx % args.val_every == 0:
@@ -465,12 +473,12 @@ def main(args, camera_config, test_segment):
                 vert_loss = np.array(vert).mean()
                 screen_loss = np.array(screen).mean()
                 kl = np.array(kl).mean()
-                if local_rank == 0:
-                    writer.add_scalar('val/loss_tex',tex_loss, val_idx)
-                    writer.add_scalar('val/loss_verts', vert_loss, val_idx)
-                    writer.add_scalar('val/loss_screen', screen_loss, val_idx)
-                    writer.add_scalar('val/loss_kl', kl, val_idx)
-                    save_img(data, output, "val_%d" % val_idx)
+                writer.add_scalar('val/loss_tex',tex_loss, val_idx)
+                writer.add_scalar('val/loss_verts', vert_loss, val_idx)
+                writer.add_scalar('val/loss_screen', screen_loss, val_idx)
+                writer.add_scalar('val/loss_kl', kl, val_idx)
+                if args.save_img:
+                  save_img(data, output, "val_%d" % val_idx)
 
                 val_idx += 1
                 print(
@@ -492,14 +500,13 @@ def main(args, camera_config, test_segment):
                 best_screen_loss = min(best_screen_loss, screen_loss)
                 best_tex_loss = min(best_tex_loss, tex_loss)
                 best_vert_loss = min(best_vert_loss, vert_loss)
-                if local_rank == 0:
-                    if (args.lambda_screen > 0 and best_screen_loss == screen_loss) or (
-                        args.lambda_screen == 0 and best_tex_loss == tex_loss
-                    ):
-                        torch.save(
-                            model.state_dict(),
-                            os.path.join(args.result_path, "best_model.pth"),
-                        )
+                if (args.lambda_screen > 0 and best_screen_loss == screen_loss) or (
+                    args.lambda_screen == 0 and best_tex_loss == tex_loss
+                ):
+                    torch.save(
+                        model.state_dict(),
+                        os.path.join(args.result_path, "best_model.pth"),
+                    )
                 model.train()
 
             if batch_idx >= args.max_iter:
@@ -507,10 +514,9 @@ def main(args, camera_config, test_segment):
                     "best screen loss %f, best tex loss %f best vert loss %f"
                     % (best_screen_loss, best_tex_loss, best_vert_loss)
                 )
-                if local_rank == 0:
-                    torch.save(
-                        model.state_dict(), os.path.join(args.result_path, "model.pth")
-                    )
+                torch.save(
+                    model.state_dict(), os.path.join(args.result_path, "model.pth")
+                )
                 train_screen_loss = np.mean(np.array(train_screen_losses))
                 train_tex_loss = np.mean(np.array(train_tex_losses))
                 train_vert_loss = np.mean(np.array(train_vert_losses))
@@ -535,8 +541,7 @@ def main(args, camera_config, test_segment):
         "best screen loss %f, best tex loss %f best vert loss %f"
         % (best_screen_loss, best_tex_loss, best_vert_loss)
     )
-    if local_rank == 0:
-        torch.save(model.state_dict(), os.path.join(args.result_path, "model.pth"))
+    torch.save(model.state_dict(), os.path.join(args.result_path, "model.pth"))
     train_screen_loss = np.mean(np.array(train_screen_losses))
     train_tex_loss = np.mean(np.array(train_tex_losses))
     train_vert_loss = np.mean(np.array(train_vert_losses))
@@ -556,16 +561,15 @@ def main(args, camera_config, test_segment):
 
 
 if __name__ == "__main__":
-    torch.distributed.init_process_group(backend="nccl")
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument(
         "--local_rank", type=int, default=0, help="Local rank for distributed run"
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=28, help="Training batch size"
+        "--train_batch_size", type=int, default=10, help="Training batch size"
     )
     parser.add_argument(
-        "--val_batch_size", type=int, default=28, help="Validation batch size"
+        "--val_batch_size", type=int, default=10, help="Validation batch size"
     )
     parser.add_argument(
         "--arch",
@@ -591,36 +595,36 @@ if __name__ == "__main__":
         "--mesh_inp_size", type=int, default=21918, help="Input mesh dimension"
     )
     parser.add_argument(
-        "--epochs", type=int, default=10, help="Number of training epochs"
+        "--epochs", type=int, default=1, help="Number of training epochs"
     )
     parser.add_argument(
         "--data_dir",
         type=str,
-        default="/mnt/captures/zhengningyuan/m--20180226--0000--6674443--GHS",
+        default="/work/dataset/m--20180227--0000--6795937--GHS",
         help="Directory to dataset root",
     )
     parser.add_argument(
         "--krt_dir",
         type=str,
-        default="/mnt/captures/zhengningyuan/m--20180226--0000--6674443--GHS/KRT",
+        default="/work/dataset/m--20180227--0000--6795937--GHS/KRT",
         help="Directory to KRT file",
     )
     parser.add_argument(
         "--loss_weight_mask",
         type=str,
-        default="./loss_weight_mask.png",
+        default="/work/experiment_scripts/loss_weight_mask.png",
         help="Mask for weighted loss of face",
     )
     parser.add_argument(
         "--framelist_train",
         type=str,
-        default="/mnt/captures/zhengningyuan/m--20180226--0000--6674443--GHS/frame_list.txt",
+        default="/work/dataset/m--20180227--0000--6795937--GHS/frame_list.txt",
         help="Frame list for training",
     )
     parser.add_argument(
         "--framelist_test",
         type=str,
-        default="/mnt/captures/zhengningyuan/m--20180226--0000--6674443--GHS/frame_list.txt",
+        default="/work/dataset/m--20180227--0000--6795937--GHS/frame_list.txt",
         help="Frame list for testing",
     )
     parser.add_argument(
@@ -672,7 +676,7 @@ if __name__ == "__main__":
         help="Directory to output files",
     )
     parser.add_argument(
-        "--model_ckpt", type=str, default=None, help="Model checkpoint path"
+        "--model_path", type=str, default=None, help="Model checkpoint path"
     )
     parser.add_argument(
         "--unified_pruning_ratio", type=float, default=0, help="model channel-wise sparsity ratio"
@@ -682,6 +686,9 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="PiCA Partition - Training Task",
+    )
+    parser.add_argument(
+        "--save_img", action='store_true', default=False, help="Control knob to enable image save"
     )
     parser.add_argument(
         "--author_name",
@@ -694,7 +701,7 @@ if __name__ == "__main__":
 
     # load camera config
     subject_id = experiment_args.data_dir.split("--")[-2]
-    camera_config_path = f"camera_configs/camera-split-config_{subject_id}.json"
+    camera_config_path = f"/work/experiment_scripts/camera_configs/camera-split-config_{subject_id}.json"
     if os.path.exists(camera_config_path):
         print(f"camera config file for {subject_id} exists, loading...")
         f = open(camera_config_path, "r")
@@ -741,8 +748,22 @@ if __name__ == "__main__":
         train_tex_loss,
         train_vert_loss,
     ) = main(experiment_args, camera_set, test_segment)
-    if torch.distributed.get_rank() == 0:
-        print(
+    print(
+        best_screen_loss,
+        best_tex_loss,
+        best_vert_loss,
+        screen_loss,
+        tex_loss,
+        vert_loss,
+        train_screen_loss,
+        train_tex_loss,
+        train_vert_loss,
+    )
+    f = open(os.path.join(experiment_args.result_path, "result.txt"), "a")
+    f.write("\n")
+    f.write(
+        "Best screen loss %f, best tex loss %f,  best vert loss %f, screen loss %f, tex loss %f, vert_loss %f, train screen loss %f, train tex loss %f, train vert loss %f"
+        % (
             best_screen_loss,
             best_tex_loss,
             best_vert_loss,
@@ -753,20 +774,5 @@ if __name__ == "__main__":
             train_tex_loss,
             train_vert_loss,
         )
-        f = open(os.path.join(experiment_args.result_path, "result.txt"), "a")
-        f.write("\n")
-        f.write(
-            "Best screen loss %f, best tex loss %f,  best vert loss %f, screen loss %f, tex loss %f, vert_loss %f, train screen loss %f, train tex loss %f, train vert loss %f"
-            % (
-                best_screen_loss,
-                best_tex_loss,
-                best_vert_loss,
-                screen_loss,
-                tex_loss,
-                vert_loss,
-                train_screen_loss,
-                train_tex_loss,
-                train_vert_loss,
-            )
-        )
-        f.close()
+    )
+    f.close()

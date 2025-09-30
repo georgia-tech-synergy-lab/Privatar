@@ -5,7 +5,7 @@
 
 # User-specific files
 __pycache__
-
+events*
 pretrain_model
 training_results
 testing_results

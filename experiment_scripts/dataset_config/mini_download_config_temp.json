@@ -1,0 +1,12 @@
+{
+  "entity": ["6795937"],
+  "image": true,
+  "mesh": true,
+  "texture": true,
+  "metadata": true,
+  "audio": true,
+  "expression":
+  [
+    "E001_Neutral_Eyes_Open"
+  ]
+}

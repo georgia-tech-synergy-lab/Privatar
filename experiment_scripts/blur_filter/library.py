@@ -268,7 +268,7 @@ def test_img_dct_transform_duplicate_freq_reorder(x, bs, ch, h, w, freq_comp_lb)
 
 
 ## Image frequency cosine transform
-def test_img_dct_transform_reorder_noise_outsource(x, bs, ch, h, w, freq_comp_lb, path_variance_matrix_tensor, add_noise):
+def test_img_dct_transform_reorder_noise_offload(x, bs, ch, h, w, freq_comp_lb, path_variance_matrix_tensor, add_noise):
     rerodered_img = img_reorder_pure_bdct(x, bs, ch, h, w)
     block_num = h // 4
     dct_block = dct.block_dct(rerodered_img) #BDCT
@@ -367,14 +367,13 @@ def test_img_dct_transform_nn_connect(x, bs, ch, h, w):
 tex_size = 1024
 val_batch_size = 1
 n_worker = 1
-path_prefix = "/home/jianming/work/multiface/"
-data_dir = f"/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS"
-krt_dir = f"/scratch2/multiface/dataset/dataset/m--20180227--0000--6795937--GHS/KRT"
-# framelist_train = f"/home/jianming/work/Privatar_prj/custom_scripts/bdct_reconstruction/single_expression_frame_list.txt"
-framelist_train = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/selected_expression_frame_list.txt"
+path_prefix = "/work/multiface/"
+data_dir = f"/work/dataset/m--20180227--0000--6795937--GHS"
+krt_dir = f"/work/dataset/m--20180227--0000--6795937--GHS/KRT"
+framelist_train = "/work/experiment_scripts/empirical_attack/selected_expression_frame_list.txt"
 subject_id = data_dir.split("--")[-2]
 camera_config_path = f"{path_prefix}camera_configs/camera-split-config_{subject_id}.json"
-result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
+result_path = "/work/experiment_scripts/blur_filter/"
 
 
 if os.path.exists(camera_config_path):
@@ -441,8 +440,8 @@ if load_test_dataset:
 
 ## Generate Data Pair -- for empirical attack setup
 if load_attack_dataset:
-    attack_camera_config_path = f"/home/jianming/work/Privatar_prj/experiment_scripts/empirical_attack/attack-camera-split-config_{subject_id}.json"
-    result_path = "/home/jianming/work/Privatar_prj/custom_scripts/nn_attack/"
+    attack_camera_config_path = f"/work/experiment_scripts/empirical_attack/attack-camera-split-config_{subject_id}.json"
+    result_path = "/work/experiment_scripts/nn_attack/"
 
     print(f"camera config file for {subject_id} exists, loading...")
     f = open(attack_camera_config_path, "r")

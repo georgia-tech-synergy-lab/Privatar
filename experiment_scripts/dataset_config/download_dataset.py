@@ -199,7 +199,7 @@ if __name__ == "__main__":
         type=str,
         required=False,
         help="Directory of data to be downloaded",
-        default="./",
+        default="/work/dataset",
     )
     parser.add_argument(
         "--download_config",
@@ -207,7 +207,7 @@ if __name__ == "__main__":
         type=str,
         required=False,
         help="File path of download_config file",
-        default="./download_config.json",
+        default="/work/experiment_scripts/dataset_config/mini_download_config.json",
     )
 
     args = parser.parse_args()
