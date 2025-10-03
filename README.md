@@ -1,4 +1,4 @@
-# Privatar: Enabling Privacy-Preserving Real-Time Multi-Users VR Through Secure Outsourcing
+# Privatar: Enabling Privacy-Preserving Real-Time Multi-Users VR Through Secure offloading
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 
@@ -10,16 +10,15 @@ Privatar is the first that leverages both local and untrusted cloud to concurren
 
 
 # Structure of the Repo: 
-- multiface_partition: Adopt BDCT filter with block=8, which gives 64 different frequency blocks, this does not have having input upsampling and remove three convolution layers.
-- multiface_partition_bdct4x4: Decompose unwrapped texture into multiple frequency components -- Adopt BDCT filter with block=4, which gives 16 different frequency blocks, this remove 2 convolution layers, no outsourcing.
-- multiface_partition_bdct4x4_hp: Decompose unwrapped texture into multiple frequency components AND horizontally partition all components into local and cloud. Adopt BDCT filter with block=4, which gives 16 different frequency blocks, this remove 2 convolution layers. The number of offloaded frequency components is controlled via ```num_freq_comp_offloaded```.
+- multiface: the baseline avatar reconstruction framework.
+- multiface_frequency_decompose: Decompose unwrapped texture into multiple frequency components -- Adopt BDCT filter with block=4, which gives 16 different frequency blocks, this remove 2 convolution layers, no offloading.
+- multiface_partition_frequency_decompose: Decompose unwrapped texture into multiple frequency components AND horizontally partition all components into local and cloud. Adopt BDCT filter with block=4, which gives 16 different frequency blocks, this remove 2 convolution layers. The number of offloaded frequency components is controlled via ```num_freq_comp_offloaded```.
 - multiface_sparse: add sparsity to only decoder of the original VAE model.
 - multiface_quantization: change the bitprecision of data into 8-/16-/32-bit integer for the decoder only.
 - multiface_direct_split: directly split the model architecture into private and public branches.
 
 
 # Installation
-We list two flows to install, run and test Privatar because different environments have different package in support. E.g. RTX 3090 supports ```RasterizeGLContext``` but GH200 only supports ```RasterizeCudaContext```. To reduce the effort for setting up configurations for different platforms, we directly prepare two sets of scripts, separately. 
 
 ## Step 1: Setup GPU Docker
 <!-- -  For typical desktop-class GPU such as RTX 3090, we recommend using the conda virtual environment.
@@ -147,7 +146,7 @@ cd /work/multiface_frequency_decompose
 python3 launch_train_job_serial.py
 ```
 
-- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components outsourcing. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
+- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components offloading. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
 This requires training to be completed.
 ```bash
 cd /work/multiface_partition_frequency_decompose
@@ -190,7 +189,7 @@ cd /work/multiface_frequency_decompose
 python3 launch_test_job_serial.py
 ```
 
-- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components outsourcing. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
+- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components offloading. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
 This requires training to be completed.
 ```bash
 cd /work/multiface_partition_frequency_decompose
@@ -239,7 +238,7 @@ cd /work/multiface_frequency_decompose
 python3 launch_test_selected_expressions.py
 ```
 
-- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components outsourcing. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
+- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components offloading. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
 This requires training to be completed.
 ```bash
 cd /work/multiface_partition_frequency_decompose
@@ -277,7 +276,7 @@ cd /work/multiface_frequency_decompose
 python3 latency_profiling_script.py
 ```
 
-- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components outsourcing. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
+- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components offloading. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
 This requires training to be completed.
 ```bash
 cd /work/multiface_partition_frequency_decompose
