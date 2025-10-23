@@ -28,8 +28,8 @@ for num_freq_comp_offloaded in num_freq_comp_offloaded_list:
     save_latent_code = False
     batch_size = 1
 
-    device = torch.device("cpu")
-    # device = torch.device("cuda", 0)
+    # device = torch.device("cpu")
+    device = torch.device("cuda", 0)
 
     model = DeepAppearanceVAE_Partition(
         1024, 21918, n_latent=256, n_cams=38, num_freq_comp_offloaded=num_freq_comp_offloaded, result_path=result_path, save_latent_code=save_latent_code
@@ -87,7 +87,7 @@ for num_freq_comp_offloaded in num_freq_comp_offloaded_list:
 
     end_time = time.time()
 
-    print(f"Under Batchsize = {batch_size}, inference latency on GPU = {(end_time - start_time) / total_inference}")
+    print(f"Under Batchsize = {batch_size}, inference latency on {device} = {(end_time - start_time) / total_inference}")
     latency_list.append((end_time - start_time) / total_inference)
 
 print(latency_list)

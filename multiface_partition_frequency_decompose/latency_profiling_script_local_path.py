@@ -77,7 +77,7 @@ for num_freq_comp_offloaded in num_freq_comp_offloaded_list:
             _ = traced_model(sample_v, sample_z_local)
 
     start_time = time.time()
-    total_inference = 10000
+    total_inference = 100
 
     for i in tqdm(range(total_inference)):
         # Run the traced model for faster inference
@@ -86,7 +86,7 @@ for num_freq_comp_offloaded in num_freq_comp_offloaded_list:
 
     end_time = time.time()
 
-    print(f"Under Batchsize = {batch_size}, inference latency on GPU = {(end_time - start_time) / total_inference}")
+    print(f"Under Batchsize = {batch_size}, inference latency on {device} = {(end_time - start_time) / total_inference}")
     latency_list.append((end_time - start_time) / total_inference)
 
 print(latency_list)

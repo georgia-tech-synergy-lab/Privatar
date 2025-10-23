@@ -17,7 +17,8 @@ from models import DeepAppearanceVAE_Partition
 
 use_traced_model = True
 
-device = torch.device("cuda", 0)
+device = torch.device("cpu")
+# device = torch.device("cuda", 0)
 batch_size = 1
 model = DeepAppearanceVAE_Partition(
     1024, 21918, n_latent=256, n_cams=38
@@ -50,7 +51,7 @@ if use_traced_model:
         _ = traced_model(z_local, v)
 
 start_time = time.time()
-total_inference = 10000
+total_inference = 1000
 if use_traced_model:
   for i in tqdm(range(total_inference)):
       traced_model(z_local, v)
@@ -60,4 +61,4 @@ else:
 
 end_time = time.time()
 
-print(f"Under Batchsize = {batch_size}, inference latency on GPU = {(end_time - start_time) / total_inference}")
+print(f"Under Batchsize = {batch_size}, inference latency on {device} = {(end_time - start_time) / total_inference}")
