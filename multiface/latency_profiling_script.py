@@ -55,11 +55,11 @@ z_local = torch.zeros(batch_size, 256).to(device)
 v = torch.zeros(batch_size, 3).to(device)
 
 start_time = time.time()
-total_inference = 100
+total_inference = 1000
 
 for i in tqdm(range(total_inference)):
     model.dec(z_local, v)
 
 end_time = time.time()
 
-print(f"Under Batchsize = {batch_size}, inference latency on GPU = {(end_time - start_time) / total_inference}")
+print(f"Under Batchsize = {batch_size}, inference latency on {device} = {(end_time - start_time) / total_inference}")

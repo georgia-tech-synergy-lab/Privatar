@@ -17,8 +17,8 @@ from models import DeepAppearanceVAE_Partition
 
 use_traced_model = True
 
-device = torch.device("cpu")
-# device = torch.device("cuda", 0)
+# device = torch.device("cpu")
+device = torch.device("cuda", 0)
 batch_size = 1
 model = DeepAppearanceVAE_Partition(
     1024, 21918, n_latent=256, n_cams=38
