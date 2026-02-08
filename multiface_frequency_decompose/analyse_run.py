@@ -113,6 +113,8 @@ def main(args, camera_config):
     for j in range(total_frequency_component):
         print(f"trace of covariance = {np.trace(np.cov(freq_tensor_list[j]))} for freq component = {j}")
 
+    return 0.0
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some integers.")
     parser.add_argument(
