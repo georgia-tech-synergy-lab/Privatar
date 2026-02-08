@@ -1,458 +1,412 @@
-# Privatar: Enabling Privacy-Preserving Real-Time Multi-Users VR Through Secure offloading
+# Privatar: Privacy-Preserving Real-Time Multi-User VR Avatar Reconstruction
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-
-# What's Privatar?
-Privatar is the first that leverages both local and untrusted cloud to concurrently achieve privacy-preserving multi-user avatar reconstruction. The entire post-split flow is illustrated as the figure below.
+Privatar leverages both local (VR headset) and untrusted cloud hardware to achieve privacy-preserving multi-user avatar reconstruction. It horizontally partitions a frequency-decomposed VAE decoder, keeping privacy-sensitive low-frequency components local while offloading high-frequency components with calibrated noise injection.
 
 <img src="figure/setup.png" width="1400">
 
+---
 
+## Repository Structure
 
-# Structure of the Repo: 
-- multiface: the baseline avatar reconstruction framework.
-- multiface_frequency_decompose: Decompose unwrapped texture into multiple frequency components -- Adopt BDCT filter with block=4, which gives 16 different frequency blocks, this remove 2 convolution layers, no offloading.
-- multiface_partition_frequency_decompose: Decompose unwrapped texture into multiple frequency components AND horizontally partition all components into local and cloud. Adopt BDCT filter with block=4, which gives 16 different frequency blocks, this remove 2 convolution layers. The number of offloaded frequency components is controlled via ```num_freq_comp_offloaded```.
-- multiface_sparse: add sparsity to only decoder of the original VAE model.
-- multiface_quantization: change the bitprecision of data into 8-/16-/32-bit integer for the decoder only.
-- multiface_direct_split: directly split the model architecture into private and public branches.
-
-
-# Installation
-
-## Step 1: Setup GPU Docker
-<!-- -  For typical desktop-class GPU such as RTX 3090, we recommend using the conda virtual environment.
-```bash
-conda create -n <your_favoriate_name> python=3.7
-conda activate <your_favoriate_name>
-``` 
-
-- For cloud-class GPU such as GH200 
-We recommand using NVIDIA built-in docker.-->
-We recommand using NVIDIA built-in docker.
-
-Command 1: Download the docker.
-If you have Docker 19.03 or later, a typical command to launch the container is:
-```bash
-docker run --gpus all -it --rm nvcr.io/nvidia/pytorch:xx.xx-py3
 ```
-Note: our experiments base on nvcr.io/nvidia/pytorch:24.01-py3
+/work/
+├── multiface/                                    # Baseline VAE (DeepAppearanceVAE)
+├── multiface_direct_split/                       # Direct architecture split into local + cloud
+├── multiface_quantization/                       # Low-precision decoder (8-16 bit)
+├── multiface_sparse/                             # Channel-pruned decoder (20-80% sparsity)
+├── multiface_frequency_decompose/                # BDCT frequency decomposition (no offloading)
+├── multiface_partition_frequency_decompose/       # BDCT + horizontal partitioning (Privatar)
+├── experiment_scripts/
+│   ├── dp_analysis/                              # Differential Privacy noise generation
+│   ├── pac_analysis/                             # PAC Privacy noise generation
+│   ├── empirical_attack/                         # Attack configs and frame lists
+│   ├── bdct_reconstruction/                      # BDCT visualization notebook
+│   ├── render_scripts/                           # Expression rendering utilities
+│   ├── figure_drawer/                            # scripts to draw all figures
+│   └── dataset_config/                           # Dataset download scripts
+├── dataset/                                      # Multiface dataset (created during setup)
+├── pretrain_model/                               # Pretrained model checkpoint
+├── training_results/                             # All training outputs
+└── testing_results/                              # All testing outputs
+```
 
-Command 2: Download this repo to <path>
+Each model variant directory contains:
+- `train.py` / `test.py` -- core training and testing logic
+- `launch_train_job_serial.py` / `launch_test_job_serial.py` -- launcher scripts with configurable parameters
+- `latency_profiling_script*.py` -- inference latency measurement
+- `models.py` -- model architecture definitions
+
+---
+
+## Prerequisites
+
+**Hardware:**
+- NVIDIA GPU with CUDA support (validated on RTX 5090; RTX 3090/4090 also supported)
+- 16 GB+ GPU memory, 52 GB+ system RAM
+- ~50 GB disk space (dataset + models + results)
+
+**Software:**
+- NVIDIA Docker: `nvcr.io/nvidia/pytorch:24.01-py3`
+- For RTX 5090: nightly PyTorch with CUDA 13.0 support
+
+---
+
+## Installation
+
+### Step 1: Launch Docker Container
+
 ```bash
+# Pull the Docker image
+docker pull nvcr.io/nvidia/pytorch:24.01-py3
+
+# Clone the repository
 git clone https://github.com/georgia-tech-synergy-lab/Privatar.git
+
+# Launch with GPU access (replace <path> with your local clone path)
+docker run --gpus all -v <path>:/work \
+  -it --ipc=host --ulimit memlock=-1 \
+  --ulimit stack=67108864 --memory 51200m \
+  --rm nvcr.io/nvidia/pytorch:24.01-py3
 ```
 
-Command 3: Launch the docker which links <path> to `/work` in docker.
+> **All commands below assume `/work` is the mount point inside Docker.**
+
+### Step 2: Install Dependencies
+
 ```bash
-docker run --gpus all -v <path>:/work -it --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 --memory 51200m  --rm <docker_name>
-```
-where <docker_name> refers to the name of your downloaded docker "nvcr.io/nvidia/pytorch:xx.xx-py3", and <path> refers to the path to Privatar.
+# OS-level dependencies
+apt-get update && apt-get install -y mesa-common-dev libegl1-mesa-dev libgles2-mesa-dev mesa-utils
 
-**CRITICAL! All following scripts assuming the `/work` is the path to this repo in docker**
+# Python packages
+pip3 install Pillow ninja imageio imageio_ffmpeg six tensorboard opencv-python wandb torchjpeg lpips
 
-## Step 2: Install Required Dependency
-Within in the Docker, install required dependency.
-- Install OS-level dependencies
-```bash
-$ apt-get install mesa-common-dev libegl1-mesa-dev libgles2-mesa-dev
-$ apt-get install mesa-utils
-$ glxinfo | grep -i opengl
-```
+# For RTX 5090 only: install nightly PyTorch with CUDA 13.0
+pip install -U --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu130
 
-- Install python packages
-```bash
-pip3 install torch
-pip3 install Pillow ninja imageio imageio_ffmpeg six tensorboard opencv-python==4.8.0.74 wandb torchjpeg
-pip3 install -U opencv-python
-```
-Note: 
-1. we use "wandb" to track the training, testing progress and record the final results.
-By default, wandb is turned off, u could change `wandb_enable` from each training/testing script to enable wandb.
-2. If the GPU is 5090, `pip install -U --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu130` should be used instead of `pip3 install torch`.
-
-
-- Install nvdiffrast package
-```bash
+# Install nvdiffrast
 git clone https://github.com/NVlabs/nvdiffrast
-cd nvdiffrast
-python3 setup.py install
-```
+cd nvdiffrast && python3 setup.py install && cd ..
 
-Note: if u are using RTX5090, please run the following patch after installing nvdiffrast to enable the feature.
-
-```bash
+# For RTX 5090 only: apply nvdiffrast patch
 source /work/experiment_scripts/nvdiffrast_patch.sh
 ```
 
-<!-- - Download and install torchjpeg (if )
-```bash
-git clone https://github.com/Queuecumber/torchjpeg
-cd torchjpeg
-pip3 setup.py install
-```
-We don't recommend installing torchjpeg using pip3 install because it might break other dependencies. -->
+> **Note:** `wandb` is optional (disabled by default). Set `wandb_enable = True` in any training/testing script to enable real-time monitoring.
 
-## Step 3: Download Datasets
-```bash
-cd /work
-mkdir dataset
-python3 ./multiface/download_dataset.py --dest "/work/dataset" --download_config "./mini_download_config.json"
-```
-If u follow above instructions, then /work should be `/work`.
-
-## Step 4: Download pretrained model
-The pretrained weights for different users in the provided datasets are collected at this [facial_pretrained_datasets](https://github.com/facebookresearch/multiface/blob/main/documentation/INSTALLATION.md). We use 6795937 base model as the evaluation target. Other structure would work as well. The link for the pretrained model weights of 6795937 is [6795937_base](https://fb-baas-f32eacb9-8abb-11eb-b2b8-4857dd089e15.s3.amazonaws.com/MugsyDataRelease/PretrainedModel/6795937--GHS-base_nosl/best_model.pth)
+### Step 3: Download Dataset
 
 ```bash
-cd /work
-mkdir pretrain_model
-cd pretain_model
-wget https://fb-baas-f32eacb9-8abb-11eb-b2b8-4857dd089e15.s3.amazonaws.com/MugsyDataRelease/PretrainedModel/6795937--GHS-base_nosl/best_model.pth -O 6795937_best_model.pth
+mkdir -p /work/dataset
+python3 /work/experiment_scripts/dataset_config/download_dataset.py \
+  --dest "/work/dataset" \
+  --download_config "/work/experiment_scripts/dataset_config/mini_download_config.json"
 ```
 
-# Ready to run?
-## Step 1: Training
-- Original: multiface baseline using the pretrained model weights
+This downloads the Multiface dataset for subject 6795937 (~30 GB): facial images, tracked meshes, and unwrapped UV textures across 65+ expressions and 40 camera views.
+
+### Step 4: Download Pretrained Model
+
 ```bash
-cd /work
-git clone https://github.com/facebookresearch/multiface.git
-cd multiface
-python3 launch_train_job_serial.py
+mkdir -p /work/pretrain_model
+wget -O /work/pretrain_model/6795937_best_model.pth \
+  https://fb-baas-f32eacb9-8abb-11eb-b2b8-4857dd089e15.s3.amazonaws.com/MugsyDataRelease/PretrainedModel/6795937--GHS-base_nosl/best_model.pth
 ```
 
-- Design Choice 1: directly split mesh and unwrapped texture into two separate path (offload entire unwrapped texture)
-```bash
-cd /work/multiface_direct_split
-python3 launch_train_job_serial.py
+The pretrained base model (97 MB) initializes all training variants. Other subject models are listed at [Multiface pretrained models](https://github.com/facebookresearch/multiface/blob/main/documentation/INSTALLATION.md).
+
+---
+
+## Experiment Pipeline
+
+The pipeline has 8 sequential steps. Each step depends on outputs from previous steps.
+
+```
+Step 1: Training ──> Step 2: Testing ──> Step 3: Latency Profiling
+                          │
+                          ├──> Step 4: Noise Calculation (DP + PAC)
+                          │         │
+                          │         └──> Step 5: Noisy Inference
+                          │                   │
+                          │                   ├──> Step 6: Empirical Attack
+                          │                   └──> Step 7: NN-based Attack
+                          │
+                          └──> Step 8: Frequency Covariance Analysis
 ```
 
-- Design Choice 2: quantize model to be low precision
-```bash
-cd /work/multiface_quantization
-python3 launch_train_job_serial.py
-```
+### Functional Test vs. Full Reproduction
 
-- Design Choice 3: prune channels from the decoder to reduce the local computation
-```bash
-cd /work/multiface_sparse
-python3 launch_train_job_serial.py
-```
+| Parameter | Functional Test | Full Reproduction |
+|-----------|----------------|-------------------|
+| `val_num` | 30 | 500 |
+| `max_iter` | 1000 | 100000 |
+| Time per variant | ~16 minutes | ~48 hours |
 
-- Design Choice 4: decompose "unwrapped texture" into 16 frequency components, but keep all of them run local.
-This requires training to be completed.
-```bash
-cd /work/multiface_frequency_decompose
-python3 launch_train_job_serial.py
-```
+To run a **functional test**, edit `val_num` and `max_iter` in each `launch_train_job_serial.py` before running. The baseline (`multiface/launch_train_job_serial.py`) ships with small defaults (`val_num=50`, `max_iter=100`); all other variants default to full reproduction values (`val_num=500`, `max_iter=100000`).
 
-- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components offloading. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
-This requires training to be completed.
+---
+
+### Step 1: Training
+
+Train all six model variants. Each produces a `best_model.pth` checkpoint in `/work/training_results/`.
+
+| Variant | Directory | Command | Output Path |
+|---------|-----------|---------|-------------|
+| Baseline | `multiface/` | `python3 launch_train_job_serial.py` | `training_results/multiface/` |
+| Direct Split | `multiface_direct_split/` | `python3 launch_train_job_serial.py` | `training_results/multiface_direct_split/` |
+| Quantization | `multiface_quantization/` | `python3 launch_train_job_serial.py` | `training_results/quant_{8..16}/` |
+| Sparsity | `multiface_sparse/` | `python3 launch_train_job_serial.py` | `training_results/sparse_0_{2..8}/` |
+| Frequency Decompose | `multiface_frequency_decompose/` | `python3 launch_train_job_serial.py` | `training_results/partition_0/` |
+| Partitioned (Privatar) | `multiface_partition_frequency_decompose/` | `python3 launch_train_job_serial.py` | `training_results/partition_{2..14}/` |
+
 ```bash
+# Example: train a single variant
 cd /work/multiface_partition_frequency_decompose
 python3 launch_train_job_serial.py
 ```
 
-Note: all training results locate at the ```/work/training_results``` folder.
+**Configurable parameters** (edit in each `launch_train_job_serial.py`):
+- Quantization: `bitwidth_list` (default: `[8, 9, 10, 11, 12, 13, 14, 15, 16]`)
+- Sparsity: `sparsity_list` (default: `[0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]`)
+- Partitioning: `num_freq_comp_offloaded_list` (default: `[14]`; set to `[2, 4, 6, 8, 10, 12, 14]` for all configs)
 
+**Expected output** (functional test, `max_iter=100000`): representative final training screen loss values:
 
-## Step 2: Testing
-Note that these test directly iterate the whole test dataset in random orders.
-- Original: multiface baseline using the pretrained model weights
+| Variant | Screen Loss |
+|---------|------------|
+| Baseline | ~0.072 |
+| Direct Split | ~0.073 |
+| Quantization (8-bit) | ~0.073 |
+| Sparsity (20%) | ~0.092 |
+| Frequency Decompose | ~0.077 |
+| Partitioned (14 offloaded) | ~0.077 |
+
+---
+
+### Step 2: Testing
+
+Evaluate trained models on the test set. Computes MSE (screen, texture, vertex) and LPIPS metrics. Saves latent codes needed for noise calculation (Step 4).
+
 ```bash
-cd /work/multiface
+# Run for each variant (same directory structure as training)
+cd /work/<variant_directory>
 python3 launch_test_job_serial.py
 ```
 
-- Design Choice 1: directly split mesh and unwrapped texture into two separate path (offload entire unwrapped texture)
-```bash
-cd /work/multiface_direct_split
-python3 launch_test_job_serial.py
-```
+All results are saved to `/work/testing_results/`. Latent codes are stored in `testing_results/<project_name>/latent_code/`:
+- `z_<id>.pth` -- local-path latent codes
+- `z_offload_<id>.pth` -- offloaded-path latent codes
 
-- Design Choice 2: quantize model to be low precision
-```bash
-cd /work/multiface_quantization
-python3 launch_test_job_serial.py
-```
+**Expected output** (using fully-trained models):
 
-- Design Choice 3: prune channels from the decoder to reduce the local computation
-```bash
-cd /work/multiface_sparse
-python3 launch_test_job_serial.py
-```
+| Variant | Screen MSE | LPIPS |
+|---------|-----------|-------|
+| Baseline | ~0.076 | ~0.610 |
+| Partitioned (14 offloaded) | ~0.077 | ~0.612 |
 
-- Design Choice 4: decompose "unwrapped texture" into 16 frequency components, but keep all of them run local.
-This requires training to be completed.
-```bash
-cd /work/multiface_frequency_decompose
-python3 launch_test_job_serial.py
-```
+> **Rendering specific expressions:** To render a selected set of expressions (e.g., for figure generation), use `launch_test_selected_expressions.py` in each variant directory. Configure the expression list in `/work/experiment_scripts/render_scripts/test_image_path`. Run `python3 /work/experiment_scripts/render_scripts/render_test_expression.py` to generate ground-truth inputs.
 
-- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components offloading. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
-This requires training to be completed.
+---
+
+### Step 3: Latency Profiling
+
+Measure decoder inference latency. The baseline runs on **modeling VR headset** (when device is not VR headset, it defaults to CPU); all other variants run on **GPU** (modeling cloud execution). Uses `torch.jit.trace` for kernel optimization where applicable.
+
+| Variant | Command | Device |
+|---------|---------|--------|
+| Baseline | `cd /work/multiface && python3 latency_profiling_script.py` | CPU |
+| Quantization | `cd /work/multiface_quantization && python3 latency_profiling_script.py` | GPU |
+| Sparsity | `cd /work/multiface_sparse && python3 latency_profiling_script.py` | GPU |
+| Freq. Decompose | `cd /work/multiface_frequency_decompose && python3 latency_profiling_script.py` | GPU |
+| Partitioned (local) | `cd /work/multiface_partition_frequency_decompose && python3 latency_profiling_script_local_path.py` | GPU |
+| Partitioned (offload) | `cd /work/multiface_partition_frequency_decompose && python3 latency_profiling_script_offload_path.py` | GPU |
+
+For FLOPs analysis across partition configurations:
 ```bash
 cd /work/multiface_partition_frequency_decompose
-python3 launch_test_job_serial.py
-```
-
-Note: all testing results locate at the ```/work/testing_results``` folder.
-
-## Step 3: Testing (For designated expressions)
-we also provide following scripts in case you only wanna see how the model performs for a specific set of images. Specifically, put the original path of the original images in the dataset into the file `/work/experiment_scripts/render_scripts/test_image_path`. And then run following commands.
-
-The input images could be generated by run following script.
-```bash
-python3 /work/experiment_scripts/render_scripts/render_test_expression.py
-```
-The ground truth of input images would be written to `/work/render_results/ground_truth_input_testing_data`.
-
-- Original: multiface baseline using the pretrained model weights
-```bash
-cd /work/multiface
-python3 launch_test_selected_expressions.py
-```
-
-- Design Choice 1: directly split mesh and unwrapped texture into two separate path (offload entire unwrapped texture)
-```bash
-cd /work/multiface_direct_split
-python3 launch_test_selected_expressions.py
-```
-
-- Design Choice 2: quantize model to be low precision
-```bash
-cd /work/multiface_quantization
-python3 launch_test_selected_expressions.py
-```
-
-- Design Choice 3: prune channels from the decoder to reduce the local computation
-```bash
-cd /work/multiface_sparse
-python3 launch_test_selected_expressions.py
-```
-
-- Design Choice 4: decompose "unwrapped texture" into 16 frequency components, but keep all of them run local.
-This requires training to be completed.
-```bash
-cd /work/multiface_frequency_decompose
-python3 launch_test_selected_expressions.py
-```
-
-- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components offloading. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
-This requires training to be completed.
-```bash
-cd /work/multiface_partition_frequency_decompose
-python3 launch_test_selected_expressions.py
-```
-
-Note that, we use `/work/dataset/m--20180227--0000--6795937--GHS/images/E009_Smile_Mouth_Open/400023/002799.png` (representing high dynamic expression) and `/work/dataset/m--20180227--0000--6795937--GHS/images/E001_Neutral_Eyes_Open/400009/000102.png` (representing low dynamic expression) to obtain the figure 1 in paper.
-
-## Step 4: Latency Profiling
-we use `torch.jit.trace` to optimize the kernel offloaded to GPU and pick which ever one between traced version and untraced version to give better performance.
-
-- Original: multiface baseline using the pretrained model weights
-```bash
-cd /work/multiface
-python3 latency_profiling_script.py
-```
-
-- Design Choice 2: quantize model to be low precision
-```bash
-cd /work/multiface_quantization
-python3 latency_profiling_script.py
-```
-Note: change `bitwidth=<val>` in `model = decoder_linear_quantization(model, bitwidth=8, datatype=torch.int8)` to change its precision.
-
-- Design Choice 3: prune channels from the decoder to reduce the local computation
-```bash
-cd /work/multiface_sparse
-python3 latency_profiling_script.py
-```
-
-- Design Choice 4: decompose "unwrapped texture" into 16 frequency components, but keep all of them run local.
-This requires training to be completed.
-```bash
-cd /work/multiface_frequency_decompose
-python3 latency_profiling_script.py
-```
-
-- Design Choice 5: decompose "unwrapped texture" into 16 frequency components, configurable components offloading. The number of frequency components are controlled by ```num_freq_comp_offloaded```.
-This requires training to be completed.
-```bash
-cd /work/multiface_partition_frequency_decompose
-python3 latency_profiling_script_local_path.py
-python3 latency_profiling_script_offload_path.py
-```
-`latency_profiling_script_local_path.py` measures latency needed for local path, which runs locally on VR headset.
-`latency_profiling_script_offload_path.py` measures latency needed for offloaded path, which runs on untrusted devices (a PC with GPU here).
-
-To further understand the total amount of computation, we also offer a script to compute the Flops needed for both paths under different configurations.
-
-```bash
 python3 latency_flops_calculation.py
 ```
 
-Note: `multiface_direct_split` is a design choice for understanding the information, hence we don't give latency profiling script for it.
+**Expected output** (RTX 5090):
 
-## Step 5: Noise Calculation
-Before calculating noise, two following steps need to be completed.
-1. **Complete Training**: Train the model to generate the final weights required for testing.
+| Configuration | Latency |
+|---------------|---------|
+| Baseline (CPU) | ~15.5 ms |
+| Quantized (8-bit, GPU, traced) | ~0.69 ms |
+| Sparse (10% pruned, GPU) | ~0.87 ms |
+| Sparse (90% pruned, GPU) | ~0.42 ms |
+| Freq. Decompose (GPU, traced) | ~0.59 ms |
+| Partitioned local path (GPU) | 0.24--0.32 ms |
+| Partitioned offload path (GPU) | 0.19--0.28 ms |
+| FLOPs range | 1.48 G (14 offloaded) to 6.07 G (2 offloaded) |
 
-2. **Perform Testing**: Use the trained model weights to evaluate. 
-During testing, the latent codes are stored in the following directory:
-   - `./testing_results/<project_name>/latent_code/`
-     - `z_<id>.pth`: Latent code for the local path.
-     - `z_offload_<id>.pth`: Latent code for the offloaded path (runs on the cloud). 
-Note: the `save_latent_code` command in the script `launch_test_job_serial.py` controls 
-whether to explicitlys store latent code to the external drive.
+> **Note:** `multiface_direct_split` is an analytical design choice; no latency profiling script is provided for it.
 
-### Calculate Differential Privacy based Noise
-Differential Privacy (DP) noise calculation follows [paper](https://arxiv.org/pdf/1702.07476). 
-DP requires the prior knowledge of the L2 norm of all offloaded latent codes.
-Detailed procedures are written as the comments in the code.
+---
+
+### Step 4: Noise Calculation
+
+**Requires:** Completed training (Step 1) and testing (Step 2) to obtain latent codes.
+
+Two noise mechanisms are supported:
+- **Differential Privacy (DP):** Uniform noise based on L2 norm of latent codes ([Balle et al., 2017](https://arxiv.org/pdf/1702.07476))
+- **PAC Privacy:** Non-uniform noise leveraging per-dimension covariance via SVD decomposition ([Xiao et al., CRYPTO 2023](https://arxiv.org/abs/2210.03458))
+
+#### DP Noise Generation
 
 ```bash
 cd /work/experiment_scripts/dp_analysis
+
+# For baseline (complete offload)
 python3 dp_noise_generation_for_multiface.py
-```
-This `dp_noise_generation_for_multiface.py` calculates the amount of DP-based noises needed to protect information when using **completed offload**, i.e. the entire decoder of the original multiface is offloaded.
 
-
-```bash
-cd /work/experiment_scripts/dp_analysis
+# For partitioned configurations (local + offloaded branches)
 python3 dp_noise_generation_for_partition_multiface.py
 ```
-The `dp_noise_generation_for_partition_multiface.py` script conducts two partitioned design choice.
-1. `multiface_direct_split`, which directly offloads the entire unwrapped texture. This is the default choice as it's baseline (completed offloaded + DP noise).
-2. `multiface_partition_frequency_decompose`, which offloads selected high frequency components of unwrapped texture.
 
-We pre-pick posterious successful rate to be [0.98, 0.827, 0.4, 0.09, 0.035], means there potentially exists an attack who could mount attack with possibility of [98%, 82.7%, 40%, 9%, 3.5%]. This boils down to mutual information list as [4, 3, 1, 0.1, 0.01].
+Output: `/work/experiment_scripts/dp_analysis/generated_dp_noise/`
+- `dp_noise_completed_offloaded_multiface_decoder_{mi}.npy` (5 files)
+- `dp_noise_partition_offloaded_decoder_{freq}_{mi}.npy` (40 files)
+- `dp_noise_partition_local_decoder_{freq}_{mi}.npy` (35 files)
+- **Total: 80 files**
 
-After this script, the generated noise will show up in the path 
-`/work/experiment_scripts/dp_analysis/generated_dp_noise/dp_noise_partition_<num_offloaded_freq_components>_<mutual_information_bound>.npy`
-
-### Calculate PAC noise
-Noise calculation following PAC privacy requires the prior knowledge of the L2 norm of **the covariance** of all offloaded latent codes.
-So that PAC privacy could leverage the dimensional differences to generate non-uniform noise for minimizing the overall noise intensity.
+#### PAC Noise Generation
 
 ```bash
-python3 /work/experiment_scripts/pac_analysis/pac_noise_generation_for_partition_multiface.py
+cd /work/experiment_scripts/pac_analysis
+python3 pac_noise_generation_for_partition_multiface.py
 ```
-After this script, the generated noise will show up in the path 
-`/work/experiment_scripts/pac_analysis/noise_covariance/pac_noise_partition_<num_offloaded_freq_components>_<mutual_information_bound>.npy`
 
-For generating PAC noise, we directly use the same mutual information as DP which gives the same provable privacy guarantee as DP noise generation.
+Output: `/work/experiment_scripts/pac_analysis/noise_covariance/`
+- `pac_noise_partition_local_decoder_{freq}_{mi}.npy`
+- `pac_noise_partition_offloaded_decoder_{freq}_{mi}.npy`
+- **Total: 75 files**
 
-## Step 6: Noisy Inference
-After noise calculation, now we could start testing the actual accuracy and latency 
-of noisy inference! Specifically, in horizontally partitioned avatar reconstruction 
-flow, generated noise is only injected to the offloaded latent codes.
+Both use mutual information bounds `[4, 3, 1, 0.1, 0.01]` corresponding to posterior success rates `[98%, 82.7%, 40%, 9%, 3.5%]`.
 
-Noisy inference
+---
+
+### Step 5: Noisy Inference
+
+**Requires:** Trained models (Step 1) and noise files (Step 4).
+
+Inject generated noise into offloaded latent codes and evaluate avatar quality degradation.
+
 ```bash
 cd /work/multiface_partition_frequency_decompose
 python3 launch_noisy_test_job_serial.py
 ```
-In this script, the noise generated from Step 5 will be fed in as `gaussian_noise_covariance_path` to the model.
-This generates detailed accuracy of noisy horizontal partitioned avatar reconstruction 
-under various partition configurations.
 
+Toggle `using_pac_noise = True/False` to switch between PAC and DP noise. Results are saved to `/work/testing_results/test_noisy_partition_{freq}_{mi}/`.
 
-Beyond the proposed horizontal frequency based partitioned design choice, we also offer 
-noisy inference code for directly split design case.
+**Expected output:**
 
+| Configuration | Screen MSE |
+|---------------|-----------|
+| Partition-2 with PAC noise (MI=1) | ~0.086 |
+| Partition-14 with DP noise (MI=0.01) | ~0.086 |
 
-## Step 7: Empirical Attack
-The attacker guesses the expression with the minimal difference through comparing the estimated frequency component to the reference expression, as shown by the Fig. 14 of the paper. Therefore, we need to first define the frequency components of reference expressions.
+---
 
-We provide three different ways of generating reference components, under all of which the attacker shows similar empirical successful rate.
+### Step 6: Empirical Attack
 
-- Method 1: ```accumulate_channel``` mode, where only high frequency components are used as reference. 
-- Method 2: ```attack_from_high_frequency_channel``` mode, where only high frequency components are used as reference. 
-- Method 3: when both modes are set as False, all 16 frequency components are sorted based on the amibuigity, and the frequency components coming with similar amount of ambuiguity will be merged as one ```if model.normalize_list[freq_pair[0]] + model.normalize_list[freq_pair[1]] < 2:```, where 2 is a random choice that could be changed into different values for obtaining different merging strategies.
+**Requires:** Trained models (Step 1) and noise files (Step 4).
 
-Specify the configuration of ```accumulate_channel``` and ```attack_from_high_frequency_channel```, then run the following script to launch attack.
+The empirical attacker guesses expressions by matching predicted high-frequency texture components to precomputed reference components (see Fig. 14 in paper).
 
 ```bash
+cd /work/multiface_partition_frequency_decompose
 python3 launch_empirical_attack.py
 ```
 
-After reference frequency components are set, we run an empirical identification attack against a pretrained DeepAppearanceVAE_Partition model by matching predicted high-frequency texture components to precomputed components from each expression, and reports the identification accuracy.
+Toggle `using_pac_noise = True/False` for PAC vs. DP noise. Results are saved to `/work/testing_results/empirical_attack_partition_{freq}_{mi}/`.
 
-The final accuracy will be printed out as ```attack_accuracy_mean <final_PSR>```
+**Attack modes** (configured via booleans in `test_empirical_attack_run.py`):
+- `accumulate_channel = True`: accumulates high-frequency components as reference
+- `attack_from_high_frequency_channel = True`: uses only high-frequency components
+- Both `False`: merges frequency components by ambiguity (configurable threshold)
 
-Note that: ```using_pac_noise``` is the command to control using PAC privacy based noise or Differential Privacy based noise.
+**Expected output:** PSR ~3.1% for partition-14 with MI=1 PAC noise (prior rate: 1/56 = 1.8%).
 
-## Step 8: Mount NN based Attack
+---
 
-We also train a three-layer fully connected network which estimates the expression from the offloaded noisy latent code. Run following script to start the training.
+### Step 7: NN-based Attack
 
-The NN attacker randomly takes one sample from each expression, as detailed in `/work/experiment_scripts/empirical_attack/selected_expression_frame_list.txt`, which becomes its training dataset.
+**Requires:** Trained models (Step 1) and noise files (Step 4).
+
+Train a 3-layer fully-connected classifier (256 -> 128 -> 66) to identify expressions from noisy offloaded latent codes.
 
 ```bash
 cd /work/multiface_partition_frequency_decompose
+
+# Train the attacker (10 epochs per partition config)
 python3 launch_train_nn_attacker.py
-```
 
-After training, launch the attack via
-```bash
-cd /work/multiface_partition_frequency_decompose
+# Test the attacker under various noise levels
 python3 launch_test_nn_attacker.py
 ```
 
-# Additional Scripts
-We also offer few scripts for researchers, who are interested in exploring the model more deeply, to see different statistics and configurations.
+Training data: one sample per expression from `/work/experiment_scripts/empirical_attack/selected_expression_frame_list.txt`.
 
-## Script 1: BDCT reconstruction script
-```/work/experiment_scripts/bdct_reconstruction/bdct_4x4_reconstruction_dataloader.ipynb``` includes the script to decomposes given unwrapped texture into different frequency components, and list few different configurations of decomposition.
+**Expected output:** PSR ~1.5% on noisy latent codes (below the 1/56 = 1.8% prior rate), confirming robustness against learned attacks.
 
-For each configuration, all frequency components will be written to the folder ```/work/experiment_scripts/bdct_reconstruction``` for visualization.
+---
 
-## Script 2: Analyze the covariance of each frequency component for different datasets
-To help understand the covariance of different frequency components under differnet datasets, we provide the script to perform running profiling of all decomposed frequency components under designated datasets. 
+### Step 8: Frequency Covariance Analysis
 
-To run it,
+Analyze the covariance trace of each of the 16 BDCT frequency components to understand the variance distribution that motivates offloading high-frequency components.
+
 ```bash
 cd /work/multiface_frequency_decompose
 python3 launch_l2norm_freq_cov_analysis.py
 ```
 
-It will shows results like following
-```bash
-trace of covariance = 11308.309006199575 for freq component = 0
-trace of covariance = 199.41605765586263 for freq component = 1
-trace of covariance = 77.53071010274161 for freq component = 2
-trace of covariance = 41.89610293635083 for freq component = 3
-trace of covariance = 152.33769320529836 for freq component = 4
-trace of covariance = 33.72750777014488 for freq component = 5
-trace of covariance = 26.97710811919577 for freq component = 6
-trace of covariance = 19.355714181792997 for freq component = 7
-trace of covariance = 38.930325425557726 for freq component = 8
-trace of covariance = 25.547661178709628 for freq component = 9
-trace of covariance = 23.260128349715654 for freq component = 10
-trace of covariance = 18.580644217635967 for freq component = 11
-trace of covariance = 23.134909910006407 for freq component = 12
-trace of covariance = 16.6648382626215 for freq component = 13
-trace of covariance = 16.267422970259233 for freq component = 14
-trace of covariance = 12.812623106426202 for freq component = 15
+**Expected output:**
+```
+trace of covariance = 11308.31 for freq component = 0
+trace of covariance = 199.42   for freq component = 1
+trace of covariance = 77.53    for freq component = 2
+trace of covariance = 41.90    for freq component = 3
+...
+trace of covariance = 12.81    for freq component = 15
 ```
 
-Note, `custom_scripts` contains scripts for development, maintainence and verification purpose.
+Low-frequency components (component 0) carry ~880x more variance than high-frequency components (component 15), confirming that high-frequency components are safe to offload.
 
+---
 
-## Script 3: Render a specific expression or a selected sets of expression using well-trained model.
-To help creating visualized expression rendered from a given model configuration, we also offer script under each setup to render visual avatar prediction for specified input images.
+## Additional Scripts
 
-Specifically, the set of images the model would render is detailed ```/work/experiment_scripts/render_scripts/test_image_path```.
+### BDCT Reconstruction Visualization
 
-To launch the image rendering,
+Interactive notebook for visualizing frequency decomposition of unwrapped textures:
+
 ```bash
-cd /work/<path_to_configuration>/
+jupyter notebook /work/experiment_scripts/bdct_reconstruction/bdct_4x4_reconstruction_dataloader.ipynb
+```
+
+### Expression Rendering
+
+Render avatar predictions for a specified set of input images across all model configurations:
+
+```bash
+cd /work/<variant_directory>
 python3 launch_test_all_expressions_RTX3090.py
 ```
-where ```<path_to_configuration>``` could be multiface, multiface_frequency_decompose, multiface_quantization, multiface_direct_split, multiface_partition_frequency_decompose and multiface_sparse.
 
-It will shows results into the folder ```/work/render_results/<configuration_name>```
+Configure input images in `/work/experiment_scripts/render_scripts/test_image_path`. Results are saved to `/work/render_results/<configuration_name>/`.
 
+---
 
-Have Fun! Enjoy! :D
+## Customization
+
+| Parameter | Location | Values |
+|-----------|----------|--------|
+| Training duration | `launch_train_job_serial.py` | `val_num`, `max_iter` |
+| Partition configs | `num_freq_comp_offloaded_list` | 2, 4, 6, 8, 10, 12, 14 |
+| Quantization bits | `bitwidth_list` | 8--16 |
+| Sparsity ratio | `sparsity_list` | 0.2--0.8 |
+| Noise type | `using_pac_noise` | `True` (PAC) / `False` (DP) |
+| MI budget | `mi_list` / `mutual_info_bound_list` | 4, 3, 1, 0.1, 0.01 |
+| Wandb logging | `wandb_enable` | `True` / `False` |

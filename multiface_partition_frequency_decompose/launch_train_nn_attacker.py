@@ -10,7 +10,7 @@ for num_freq_comp_offloaded in [2, 4, 6, 8, 10, 12, 14]:
   epoch = 10
   input_feature = 256
   hidden_feature = 128
-  output_feature = 65
+  output_feature = 66
   lr = 1e-4
   momentum  = 0
   nn_attacker_model_path = f"/work/training_results/nn_attacker_{num_freq_comp_offloaded}/best_attacker_model.pth"

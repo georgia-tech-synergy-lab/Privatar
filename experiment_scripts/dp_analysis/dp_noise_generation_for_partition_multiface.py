@@ -113,6 +113,27 @@ for j, offload_freq_num in enumerate(offload_freq_list):
   print(f'Overall data shape = ({total_test_size}, {dim_size})')
 
   ##############################
+  # Local Branch
+  ##############################
+  if offload_freq_num < 16:
+      captured_z_data = np.zeros((total_test_size, dim_size))
+      for k in tqdm(range(number_files)):
+          z_file_list = f"{captured_data_list}/z_{k+1}.pth"
+          captured_z = torch.load(z_file_list).to("cpu")
+          captured_z_data[k*batch_size:(k+1)*batch_size] = captured_z.detach().numpy()
+
+      l2_norm_local = np.linalg.norm(captured_z_data)
+      np.save(f"./l2norm/l2norm_offload_freq_num_{offload_freq_num}_z_local.npy", l2_norm_local)
+      print(f"l2norm of local vector when offload_freq_num={offload_freq_num}", l2_norm_local)
+
+      sigma_local_under_various_psr = dp_noise_calculation(l2_norm_local, prior_successful_rate, posterious_successful_rate_list)
+      for i, sigma in enumerate(sigma_local_under_various_psr):
+          trace_noise = np.sum(math.sqrt(sigma)*dimensionality)
+          print(f"when num_freq_comp_offloadd={offload_freq_num}, Accumulation of simga_i (trace) of LOCAL noise covariance = {trace_noise} when MI = {mutual_info_bound_list[i]}")
+          dp_noise = np.ones(dimensionality) * math.sqrt(sigma)
+          np.save(f"./generated_dp_noise/dp_noise_partition_local_decoder_{offload_freq_num}_{mutual_info_bound_list[i]}.npy", dp_noise)
+
+  ##############################
   # offloadd Branch
   ##############################
   captured_z_offload_data = np.zeros((total_test_size, dim_size))
@@ -124,11 +145,11 @@ for j, offload_freq_num in enumerate(offload_freq_list):
           captured_z_offload_data[k*batch_size:(k+1)*batch_size] = captured_z_offload.detach().numpy()
 
       l2_norm_offloadd = np.linalg.norm(captured_z_offload_data)
-      
+
       # Print the covariance matrix
       np.save(f"./l2norm/l2norm_offload_freq_num_{offload_freq_num}_z.npy", l2_norm_offloadd)
       print(f"l2norm of offloadd vector when offload_freq_num={offload_freq_num}_z.npy", l2_norm_offloadd)
-  
+
   sigma_under_various_psr = dp_noise_calculation(l2_norm_offloadd, prior_successful_rate, posterious_successful_rate_list)
   sgl_offload_noise_trace_list = []
   for i, sigma in enumerate(sigma_under_various_psr):
