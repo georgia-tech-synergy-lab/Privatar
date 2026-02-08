@@ -27,6 +27,7 @@ from models import DeepAppearanceVAEDirectSplit
 from torch.utils.data import DataLoader, RandomSampler
 from utils import Renderer, gammaCorrect
 import wandb
+import lpips
 
 wandb_enable = False
 force_gl = os.environ.get("NVDIFRAST_FORCE_GL") == "1"
@@ -72,6 +73,12 @@ def main(args, camera_config, test_segment):
     renderer = Renderer()
 
     mse = nn.MSELoss()
+
+    # Initialize LPIPS model if enabled
+    lpips_model = None
+    if args.use_lpips:
+        lpips_model = lpips.LPIPS(net='alex').to(device)
+        lpips_model.eval()
 
     texmean = cv2.resize(dataset_test.texmean, (args.tex_size, args.tex_size))
     texmin = cv2.resize(dataset_test.texmin, (args.tex_size, args.tex_size))
@@ -165,6 +172,19 @@ def main(args, camera_config, test_segment):
         else:
             screen_loss, pred_screen = torch.zeros([]), None
 
+        # Compute LPIPS loss between original input image and reconstructed image
+        lpips_loss = torch.zeros([])
+        if args.use_lpips and lpips_model is not None and pred_screen is not None:
+            pred_screen_lpips = pred_screen.permute(0, 3, 2, 1)
+            photo_lpips = photo_short
+            if photo_lpips.shape[1] != 3:
+                photo_lpips = photo_lpips.permute(0, 3, 1, 2)
+            if pred_screen_lpips.shape[2:] != photo_lpips.shape[2:]:
+                pred_screen_lpips = F.interpolate(pred_screen_lpips, size=photo_lpips.shape[2:], mode='bilinear', align_corners=False)
+            pred_screen_lpips = pred_screen_lpips * 2 - 1
+            photo_lpips = photo_lpips * 2 - 1
+            lpips_loss = lpips_model(pred_screen_lpips, photo_lpips).mean()
+
         total_loss = 0
         if args.lambda_verts > 0:
             total_loss = total_loss + args.lambda_verts * vert_loss
@@ -182,6 +202,7 @@ def main(args, camera_config, test_segment):
             "tex_loss": tex_loss,
             "denorm_tex_loss": tex_loss * (texstd**2),
             "kl": kl,
+            "lpips_loss": lpips_loss,
         }
 
         output["pred_screen"] = pred_screen
@@ -246,30 +267,34 @@ def main(args, camera_config, test_segment):
     best_screen_loss = 1e8
     best_tex_loss = 1e8
     best_vert_loss = 1e8
+    best_lpips_loss = 1e8
     model.train()
 
     model.eval()
     begin_time = time.time()
 
-    total, vert, tex, screen, kl = [], [], [], [], []
+    total, vert, tex, screen, kl, lpips_val = [], [], [], [], [], []
     for i, data in tqdm(enumerate(test_loader)):
         losses, output = run_net(data)
         total.append(losses["total_loss"].item())
         vert.append(losses["vert_loss"].item())
-        tex.append(losses["denorm_tex_loss"].item()) # denormalized 
+        tex.append(losses["denorm_tex_loss"].item()) # denormalized
         screen.append(losses["screen_loss"].item())
         kl.append(losses["kl"].item())
+        if args.use_lpips:
+            lpips_val.append(losses["lpips_loss"].item())
 
         if wandb_enable:
-            wandb_logger.log(
-                {
-                    "total_loss": losses["total_loss"].item(),
-                    "vert_loss": losses["vert_loss"].item(),
-                    "tex_loss": losses["tex_loss"].item(),
-                    "screen_loss": losses["screen_loss"].item(),
-                    "kl": losses["kl"].item(),
-                }
-            )
+            log_dict = {
+                "total_loss": losses["total_loss"].item(),
+                "vert_loss": losses["vert_loss"].item(),
+                "tex_loss": losses["tex_loss"].item(),
+                "screen_loss": losses["screen_loss"].item(),
+                "kl": losses["kl"].item(),
+            }
+            if args.use_lpips:
+                log_dict["lpips_loss"] = losses["lpips_loss"].item()
+            wandb_logger.log(log_dict)
 
         if args.save_img:
             save_img(data, output, "val_%s_%s" % (val_idx, i))
@@ -282,29 +307,41 @@ def main(args, camera_config, test_segment):
     vert_loss = np.array(vert).mean()
     screen_loss = np.array(screen).mean()
     kl = np.array(kl).mean()
+    lpips_loss = np.array(lpips_val).mean() if args.use_lpips and len(lpips_val) > 0 else 0.0
 
     writer.add_scalar('val/loss_tex', tex_loss, val_idx)
     writer.add_scalar('val/loss_verts', vert_loss, val_idx)
     writer.add_scalar('val/loss_screen', screen_loss, val_idx)
     writer.add_scalar('val/loss_kl', kl, val_idx)
+    if args.use_lpips:
+        writer.add_scalar('val/loss_lpips', lpips_loss, val_idx)
 
     if wandb_enable:
-        wandb_logger.log(
-            {
-                "val_total_loss": total_loss,
-                "val_vert_loss": vert_loss,
-                "val_tex_loss": tex_loss,
-                "val_screen_loss": screen_loss,
-                "val_kl": kl,
-            }
+        val_log_dict = {
+            "val_total_loss": total_loss,
+            "val_vert_loss": vert_loss,
+            "val_tex_loss": tex_loss,
+            "val_screen_loss": screen_loss,
+            "val_kl": kl,
+        }
+        if args.use_lpips:
+            val_log_dict["val_lpips_loss"] = lpips_loss
+        wandb_logger.log(val_log_dict)
+    if args.use_lpips:
+        print(
+            "val %d vert %.3f tex %.3f screen %.5f kl %.3f lpips %.5f"
+            % (val_idx, vert_loss, tex_loss, screen_loss, kl, lpips_loss)
         )
-    print(
-        "val %d vert %.3f tex %.3f screen %.5f kl %.3f"
-        % (val_idx, vert_loss, tex_loss, screen_loss, kl)
-    )
+    else:
+        print(
+            "val %d vert %.3f tex %.3f screen %.5f kl %.3f"
+            % (val_idx, vert_loss, tex_loss, screen_loss, kl)
+        )
     best_screen_loss = min(best_screen_loss, screen_loss)
     best_tex_loss = min(best_tex_loss, tex_loss)
     best_vert_loss = min(best_vert_loss, vert_loss)
+    if args.use_lpips:
+        best_lpips_loss = min(best_lpips_loss, lpips_loss)
 
     end_time = time.time()
     print("Testing takes %f seconds" % (end_time - begin_time))
@@ -316,9 +353,7 @@ def main(args, camera_config, test_segment):
         best_screen_loss,
         best_tex_loss,
         best_vert_loss,
-        screen_loss,
-        tex_loss,
-        vert_loss,
+        best_lpips_loss,
     )
 
 if __name__ == "__main__":
@@ -443,6 +478,9 @@ if __name__ == "__main__":
         "--save_img", action='store_true', default=False, help="Control knob to enable image save"
     )
     parser.add_argument(
+        "--use_lpips", action='store_true', default=False, help="Enable LPIPS (Learned Perceptual Image Patch Similarity) loss computation between original input image and reconstructed image"
+    )
+    parser.add_argument(
         "--gaussian_noise_covariance_path", type=str, default=None, help="The path of the noise covariance"
     )
 
@@ -492,34 +530,50 @@ if __name__ == "__main__":
         best_screen_loss,
         best_tex_loss,
         best_vert_loss,
-        screen_loss,
-        tex_loss,
-        vert_loss,
+        best_lpips_loss,
     ) = main(experiment_args, camera_set, test_segment)
     print("--------------------------------")
-    print(
-        "Best screen loss %f, best tex loss %f,  best vert loss %f, screen loss %f, tex loss %f, vert_loss %f"
-        % (
-            best_screen_loss,
-            best_tex_loss,
-            best_vert_loss,
-            screen_loss,
-            tex_loss,
-            vert_loss,
+    if experiment_args.use_lpips:
+        print(
+            "Best screen loss %f, best tex loss %f,  best vert loss %f, best lpips loss %f"
+            % (
+                best_screen_loss,
+                best_tex_loss,
+                best_vert_loss,
+                best_lpips_loss,
+            )
         )
-    )
-    print("--------------------------------")
-    f = open(os.path.join(experiment_args.result_path, "result.txt"), "a")
-    f.write("\n")
-    f.write(
-        "Best screen loss %f, best tex loss %f,  best vert loss %f, screen loss %f, tex loss %f, vert_loss %f"
-        % (
-            best_screen_loss,
-            best_tex_loss,
-            best_vert_loss,
-            screen_loss,
-            tex_loss,
-            vert_loss,
+        print("--------------------------------")
+        f = open(os.path.join(experiment_args.result_path, "result.txt"), "a")
+        f.write("\n")
+        f.write(
+            "Best screen loss %f, best tex loss %f,  best vert loss %f, best lpips loss %f"
+            % (
+                best_screen_loss,
+                best_tex_loss,
+                best_vert_loss,
+                best_lpips_loss,
+            )
         )
-    )
-    f.close()
+        f.close()
+    else:
+        print(
+            "Best screen loss %f, best tex loss %f,  best vert loss %f"
+            % (
+                best_screen_loss,
+                best_tex_loss,
+                best_vert_loss,
+            )
+        )
+        print("--------------------------------")
+        f = open(os.path.join(experiment_args.result_path, "result.txt"), "a")
+        f.write("\n")
+        f.write(
+            "Best screen loss %f, best tex loss %f,  best vert loss %f"
+            % (
+                best_screen_loss,
+                best_tex_loss,
+                best_vert_loss,
+            )
+        )
+        f.close()
