@@ -20,6 +20,9 @@ logger = logging.getLogger("Dataset Download")
 
 def worker(path):
     if path[-4:] == ".tar":
+        if os.path.isfile("%s.unzip" % (path)):
+            logging.info("Already extracted %s, skipping." % (path))
+            return
         try_count = 0
         while True and (try_count < MAX_TRY):
             try_count = try_count + 1
@@ -54,6 +57,9 @@ def checksum(tar_files, file_root, entity, checksum_file):
         tar_name = line.split(" ")[-1].strip()
         tar_file = os.path.join(file_root, entity + tar_name)
         if tar_file not in tar_files:
+            continue
+        if os.path.isfile("%s.checksum" % (tar_file)):
+            logging.info("File %s already passed checksum, skipping." % (tar_file))
             continue
         try:
             file = open(tar_file)
@@ -120,6 +126,8 @@ def download_tar(
             included_file = False
             if file_name in misc or "metadata" in file_name or "audio" in file_name:
                 included_file = True
+            elif "average" in file_name:
+                included_file = True
             else:
                 for exp in expression:
                     if exp in file_name:
@@ -130,10 +138,16 @@ def download_tar(
                 continue
 
             file_path = os.path.join(download_dest, entity + file_name)
+            if os.path.isfile("%s.download" % (file_path)):
+                logging.info("Already downloaded %s, skipping." % (file_path))
+                tar_files.append(file_path)
+                if "CHECKSUM" in file_name:
+                    checksum_file = file_path
+                continue
             try_count = 0
             while True and (try_count < MAX_TRY):
                 try_count = try_count + 1
-                cmd = "wget -O %s %s && touch %s.download" % (
+                cmd = "wget -c -O %s %s && touch %s.download" % (
                     file_path,
                     link.get("href"),
                     file_path,
