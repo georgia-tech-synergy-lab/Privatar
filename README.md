@@ -45,7 +45,7 @@ Each model variant directory contains:
 **Hardware:**
 - NVIDIA GPU with CUDA support (validated on RTX 5090; RTX 3090/4090 also supported)
 - 16 GB+ GPU memory, 52 GB+ system RAM
-- ~50 GB disk space (dataset + models + results)
+- 1 TB disk space (dataset + models + results)
 
 **Software:**
 - NVIDIA Docker: `nvcr.io/nvidia/pytorch:24.01-py3`
