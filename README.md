@@ -45,7 +45,7 @@ Each model variant directory contains:
 **Hardware:**
 - NVIDIA GPU with CUDA support (validated on RTX 5090; RTX 3090/4090 also supported)
 - 16 GB+ GPU memory, 52 GB+ system RAM
-- 1 TB disk space (dataset + models + results)
+- 1 TB disk space (dataset + models + results). The full dataset for one identity does require **terabytes of storage**. However, for **functional correctness testing**, only a **small subset** of the dataset is needed (`Privatar/experiment_scripts/dataset_config/minimal_config.json`), and that subset requires **no more than 50 GB** of disk space.
 
 **Software:**
 - NVIDIA Docker: `nvcr.io/nvidia/pytorch:24.01-py3`
