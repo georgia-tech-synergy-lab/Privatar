@@ -85,9 +85,9 @@ pip3 install Pillow ninja imageio imageio_ffmpeg six tensorboard opencv-python w
 # For RTX 5090 only: install nightly PyTorch with CUDA 13.0
 pip install -U --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu130
 
-# Install nvdiffrast
+# Install nvdiffrast (--no-build-isolation ensures it links against installed PyTorch)
 git clone https://github.com/NVlabs/nvdiffrast
-cd nvdiffrast && python3 setup.py install && cd ..
+cd nvdiffrast && pip install --no-build-isolation -e . && cd ..
 
 # For RTX 5090 only: apply nvdiffrast patch
 source /work/experiment_scripts/nvdiffrast_patch.sh
